@@ -26,8 +26,12 @@ PROJECTS = {
     },
 }
 
+# ── Scheduler state ───────────────────────────────────────────────────────────
+_scheduler = None
+_last_auto_backup = {"timestamp": None, "success": None, "output": ""}
 
-def get_backup_info(project):
+
+def get_backup_info(project: str) -> dict:
     folder = os.path.join(BACKUP_BASE, project)
     if not os.path.isdir(folder):
         return {"count": 0, "latest": None, "files": []}
@@ -39,49 +43,41 @@ def get_backup_info(project):
     return {"count": len(files), "latest": dt, "files": [os.path.basename(f) for f in files]}
 
 
-@app.route("/")
-def index():
-    backup_info = {k: get_backup_info(k) for k in PROJECTS}
-    return render_template("index.html", projects=PROJECTS, backup_info=backup_info,
-                           now=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"))
-
-
-@app.route("/api/backup", methods=["POST"])
-def run_backup():
+def _run_backup_script() -> tuple[bool, str]:
+    """Shared backup runner used by both the API endpoint and the scheduler."""
     script = os.path.join(os.path.dirname(__file__), "..", "scripts", "backup.py")
+    result = subprocess.run(
+        ["python3", script], capture_output=True, text=True,
+        timeout=30, env=os.environ.copy()
+    )
+    return result.returncode == 0, result.stdout + result.stderr
+
+
+def _scheduled_backup() -> None:
+    """Called by APScheduler every 6 hours."""
+    global _last_auto_backup
+    ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     try:
-        result = subprocess.run(["python3", script], capture_output=True, text=True,
-                                timeout=30, env=os.environ.copy())
-        return jsonify({"success": result.returncode == 0, "output": result.stdout + result.stderr,
-                        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")})
-    except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "output": "Timed out after 30s"})
+        ok, output = _run_backup_script()
+        _last_auto_backup = {"timestamp": ts, "success": ok, "output": output}
+        print(f"[scheduler] Backup {'OK' if ok else 'FAILED'} at {ts}")
+    except Exception as e:
+        _last_auto_backup = {"timestamp": ts, "success": False, "output": str(e)}
+        print(f"[scheduler] Backup ERROR at {ts}: {e}")
 
 
-@app.route("/api/health")
-def health():
-    import requests as req
-    results = {}
-    for key, cfg in PROJECTS.items():
-        try:
-            t0 = _time.time()
-            r = req.get(cfg["live"], timeout=10, allow_redirects=True)
-            ms = int((_time.time() - t0) * 1000)
-            bi = get_backup_info(key)
-            stale = bi["count"] == 0
-            if not stale and bi["latest"]:
-                ldt = datetime.strptime(bi["latest"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc)
-                stale = (datetime.now(timezone.utc) - ldt).total_seconds() / 3600 > 24
-            results[key] = {"status": "up", "code": r.status_code, "response_ms": ms, "backup_stale": stale}
-        except Exception as e:
-            results[key] = {"status": "down", "error": str(e)}
-    return jsonify(results)
-
-
-@app.route("/api/backups")
-def backup_status():
-    return jsonify({k: get_backup_info(k) for k in PROJECTS})
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+def _start_scheduler() -> None:
+    """Start APScheduler background thread (once per process)."""
+    global _scheduler
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        _scheduler = BackgroundScheduler(daemon=True)
+        _scheduler.add_job(
+            _scheduled_backup, "interval", hours=6, id="auto_backup",
+            next_run_time=datetime.utcnow()  # run once immediately on boot
+        )
+        _scheduler.start()
+        print("[scheduler] Auto-backup scheduler started (every 6h)")
+    except ImportError:
+        print("[scheduler] APScheduler not installed — auto-backup disabled")
+    
