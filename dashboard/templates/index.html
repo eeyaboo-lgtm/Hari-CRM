@@ -94,6 +94,27 @@
   .run-backup-btn:hover{background:var(--rouge-light)}
   .run-backup-btn:disabled{opacity:.5;cursor:not-allowed}
   #backup-log{margin-top:14px;background:#f7f5f2;border:0.5px solid var(--border);border-radius:8px;padding:12px;font-family:monospace;font-size:11px;color:#333;white-space:pre-wrap;display:none;max-height:160px;overflow-y:auto}
+
+  /* ── Schedule status row ── */
+  .sched-row{display:flex;align-items:center;gap:10px;margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border-light);font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+  .sched-row strong{color:var(--text)}
+  .sched-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
+  .sched-dot.off{background:var(--muted-light)}
+
+  /* ── Improvements panel ── */
+  .improve-card{background:var(--card);border:0.5px solid var(--border);border-radius:12px;padding:20px;margin-bottom:28px}
+  .improve-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .improve-card-top h3{font-family:var(--font-serif);font-size:16px}
+  .improve-list{display:flex;flex-direction:column;gap:10px}
+  .improve-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-radius:8px;border:0.5px solid var(--border-light);background:var(--main-bg);transition:border-color .15s}
+  .improve-item:hover{border-color:var(--border)}
+  .improve-pri{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border-radius:10px;flex-shrink:0;margin-top:1px}
+  .pri-high{background:#fee2e2;color:#b91c1c}
+  .pri-med{background:var(--amber-bg);color:#92400e}
+  .pri-low{background:var(--blue-bg);color:#1e40af}
+  .improve-body{flex:1}
+  .improve-title{font-size:12.5px;font-weight:600;margin-bottom:3px;color:var(--text)}
+  .improve-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
 </style>
 </head>
 <body>
@@ -112,6 +133,7 @@
     <div class="nav-sep"></div>
     <div class="nav-section">Tools</div>
     <div class="nav-item" onclick="document.getElementById('backup-section').scrollIntoView({behavior:'smooth'})"><span class="icon">💾</span> Backups</div>
+    <div class="nav-item" onclick="document.getElementById('improve-section').scrollIntoView({behavior:'smooth'})"><span class="icon">💡</span> Improvements</div>
   </div>
   <div class="sidebar-footer">
     <div class="sf-tag">Hari-CRM · Admin</div>
@@ -266,155 +288,78 @@
           </div>
           {% endfor %}
         </div>
+        <!-- Schedule status -->
+        <div class="sched-row">
+          <span class="sched-dot{% if not sched_status.running %} off{% endif %}"></span>
+          <span>Auto-backup: <strong>every {{ sched_status.interval_hours }}h</strong></span>
+          {% if sched_status.last.timestamp %}
+            <span>·</span>
+            <span>Last run: <strong>{{ sched_status.last.timestamp }}</strong>
+              {% if sched_status.last.success %}<span style="color:var(--green)">✓</span>{% else %}<span style="color:var(--red)">✗</span>{% endif %}
+            </span>
+          {% else %}
+            <span>· <em style="color:var(--muted-light)">Not yet run this session</em></span>
+          {% endif %}
+          {% if not sched_status.running %}
+            <span style="color:var(--red);font-weight:600">⚠ Scheduler offline</span>
+          {% endif %}
+        </div>
         <div id="backup-log"></div>
       </div>
     </div>
 
-  </div><!-- /content -->
-</div><!-- /main -->
+    <!-- Improvements panel -->
+    <div id="improve-section">
+      <div class="section-label">Suggested Improvements</div>
+      <div class="improve-card">
+        <div class="improve-card-top">
+          <h3>System Recommendations</h3>
+          <span style="font-size:11px;color:var(--muted)">Updated {{ now }}</span>
+        </div>
+        <div class="improve-list">
 
-<script>
-// ── Speedometer renderer ───────────────────────────────────────────
-const ARC_LEN = 251; // half-circle circumference for r=80
+          <div class="improve-item">
+            <span class="improve-pri pri-high">High</span>
+            <div class="improve-body">
+              <div class="improve-title">Add Render deploy webhook → auto-refresh dashboard</div>
+              <div class="improve-desc">Hook Render's deploy events to a <code>/api/deploy-event</code> endpoint so the dashboard health scores refresh automatically on every new deploy, rather than relying on manual refresh.</div>
+            </div>
+          </div>
 
-function scoreColor(score) {
-  if (score >= 90) return '#16a34a';
-  if (score >= 70) return '#d97706';
-  if (score >= 40) return '#ea580c';
-  return '#dc2626';
-}
+          <div class="improve-item">
+            <span class="improve-pri pri-high">High</span>
+            <div class="improve-body">
+              <div class="improve-title">Persist backup history across Render restarts</div>
+              <div class="improve-desc">Render ephemeral filesystem loses backups on dyno restart. Mount a Render Disk (or push backups to a GitHub branch/S3 bucket) so the rotating 5-copy archive survives deploys.</div>
+            </div>
+          </div>
 
-function setSpeedometer(project, score) {
-  const arc    = document.getElementById('arc-' + project);
-  const needle = document.getElementById('needle-' + project);
-  const numEl  = document.getElementById('score-' + project);
-  if (!arc) return;
+          <div class="improve-item">
+            <span class="improve-pri pri-med">Med</span>
+            <div class="improve-body">
+              <div class="improve-title">Uptime history chart (7-day sparkline)</div>
+              <div class="improve-desc">Store each health check result in a lightweight SQLite table (or JSON file) and render a 7-day sparkline under each speedometer so trends are visible at a glance.</div>
+            </div>
+          </div>
 
-  const pct    = Math.max(0, Math.min(100, score)) / 100;
-  const drawn  = pct * ARC_LEN;
-  const color  = scoreColor(score);
+          <div class="improve-item">
+            <span class="improve-pri pri-med">Med</span>
+            <div class="improve-body">
+              <div class="improve-title">Email/Telegram alert on service down</div>
+              <div class="improve-desc">When a health check returns <code>status: down</code>, fire a notification via SendGrid or a Telegram bot. Add a cooldown so you don't get spammed during extended outages.</div>
+            </div>
+          </div>
 
-  // Animate arc
-  arc.style.transition = 'stroke-dasharray 1s ease';
-  arc.setAttribute('stroke', color);
-  arc.setAttribute('stroke-dasharray', `${drawn} ${ARC_LEN}`);
+          <div class="improve-item">
+            <span class="improve-pri pri-low">Low</span>
+            <div class="improve-body">
+              <div class="improve-title">Add ShelfPulse &amp; RetailSuite commit-log panel</div>
+              <div class="improve-desc">Use the GitHub API to show the last 3 commits per project directly on the dashboard — quick visibility into what was last shipped without opening GitHub.</div>
+            </div>
+          </div>
 
-  // Needle: -90deg = 0, 0deg = 50, +90deg = 100
-  const deg = -90 + pct * 180;
-  needle.setAttribute('transform', `rotate(${deg},100,100)`);
-  needle.setAttribute('stroke', color);
-
-  numEl.textContent = score;
-  numEl.style.color = color;
-}
-
-// ── Health check ───────────────────────────────────────────────────
-async function runHealthCheck() {
-  const projects = ['shelfpulse', 'retailsuite'];
-  document.getElementById('last-checked').textContent = 'Checking…';
-
-  // Reset badges
-  projects.forEach(p => {
-    document.getElementById('badge-' + p).className = 'status-badge badge-checking';
-    document.getElementById('badge-' + p).innerHTML = '<span class="dot"></span> Checking';
-    document.getElementById('issues-' + p).innerHTML =
-      '<div class="issue-item"><span class="issue-icon">⏳</span> Running diagnostics…</div>';
-    document.getElementById('score-' + p).textContent = '—';
-    document.getElementById('score-' + p).style.color = '';
-    // reset arc
-    const arc = document.getElementById('arc-' + p);
-    if (arc) { arc.setAttribute('stroke-dasharray','0 251'); arc.setAttribute('stroke','#e2ddd8'); }
-  });
-
-  try {
-    const res  = await fetch('/api/health');
-    const data = await res.json();
-
-    for (const [key, info] of Object.entries(data)) {
-      const badge  = document.getElementById('badge-' + key);
-      const issEl  = document.getElementById('issues-' + key);
-      let score    = 100;
-      const issues = [];
-
-      if (info.status === 'down') {
-        score = 0;
-        issues.push({ icon:'🔴', text: `Service offline — ${info.error || 'no response'}` });
-        badge.className = 'status-badge badge-down';
-        badge.innerHTML = '<span class="dot"></span> Down';
-      } else {
-        badge.className = 'status-badge badge-up';
-        badge.innerHTML = '<span class="dot"></span> Online';
-
-        if (info.code && info.code !== 200) {
-          score -= 20;
-          issues.push({ icon:'🟡', text: `Unexpected HTTP ${info.code}` });
-        }
-        if (info.response_ms && info.response_ms > 3000) {
-          score -= 15;
-          issues.push({ icon:'🟡', text: `Slow response: ${info.response_ms}ms` });
-        } else if (info.response_ms && info.response_ms > 1500) {
-          score -= 5;
-          issues.push({ icon:'🟡', text: `Elevated latency: ${info.response_ms}ms` });
-        }
-        if (info.ssl_error) {
-          score -= 20;
-          issues.push({ icon:'🟠', text: `SSL issue: ${info.ssl_error}` });
-        }
-        if (info.backup_stale) {
-          score -= 10;
-          issues.push({ icon:'🟡', text: 'No recent backup (>24h)' });
-        }
-      }
-
-      score = Math.max(0, score);
-      setSpeedometer(key, score);
-
-      if (issues.length === 0) {
-        issEl.innerHTML = '<div class="no-issues">✅ All checks passed — no issues found</div>';
-      } else {
-        issEl.innerHTML = issues.map(i =>
-          `<div class="issue-item"><span class="issue-icon">${i.icon}</span>${i.text}</div>`
-        ).join('');
-      }
-    }
-
-    const now = new Date().toLocaleTimeString();
-    document.getElementById('last-checked').textContent = `Last checked: ${now}`;
-
-  } catch(e) {
-    ['shelfpulse','retailsuite'].forEach(p => {
-      document.getElementById('badge-' + p).className = 'status-badge badge-down';
-      document.getElementById('badge-' + p).innerHTML = '<span class="dot"></span> Error';
-      document.getElementById('issues-' + p).innerHTML =
-        `<div class="issue-item"><span class="issue-icon">🔴</span> Health check failed: ${e.message}</div>`;
-      setSpeedometer(p, 0);
-    });
-  }
-}
-
-// ── Backup ────────────────────────────────────────────────────────
-async function runBackup() {
-  const btn = document.getElementById('backup-btn');
-  const log = document.getElementById('backup-log');
-  btn.disabled = true;
-  btn.textContent = '⏳ Running…';
-  log.style.display = 'block';
-  log.textContent = 'Starting backup…\n';
-  try {
-    const res  = await fetch('/api/backup', { method: 'POST' });
-    const data = await res.json();
-    log.textContent = data.output || (data.success ? 'Completed successfully.' : 'No output returned.');
-    btn.textContent = data.success ? '✓ Done' : '✗ Failed';
-    setTimeout(() => { btn.disabled = false; btn.textContent = '▶ Run Backup Now'; }, 3000);
-  } catch(e) {
-    log.textContent = 'Error: ' + e.message;
-    btn.disabled = false;
-    btn.textContent = '▶ Run Backup Now';
-  }
-}
-
-// Run on load
-runHealthCheck();
-</script>
-</body>
-</html>
+          <div class="improve-item">
+            <span class="improve-pri pri-low">Low</span>
+            <div class="improve-body">
+              <div class="improve-title">Password-protect the dashboard</div>
+              <div class="improve-desc">Add a simple <code>DASHBOARD_PASSWORD</code> env var check with Flask-Login or HTTP Basic Auth. Currently anyone with the URL can see and trigger bac
