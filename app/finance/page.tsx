@@ -16,16 +16,16 @@ import {
   budgetStatus,
   BUDGET_STATUS_CLASSES,
 } from "@/lib/financeUtils";
-import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown } from "lucide-react";
+import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap } from "lucide-react";
 
 type Currency = "AED" | "LKR" | "USD";
-type Account = { id: string; ownerId: string; name: string; type: "bank" | "bnpl"; currency: Currency; balance: number; sensitive: boolean };
+type Account = { id: string; ownerId: string; name: string; type: "bank" | "bnpl"; currency: Currency; balance: number };
 type CardAcct = {
   id: string; ownerId: string; name: string; network: "visa" | "mastercard" | "other";
   last4: string; currency: Currency; creditLimit: number; limitUsed: number;
   interestRate: number; tenureMonths: number; outstanding: number;
 };
-type CardSpend = { id: string; cardId: string; label: string; amount: number; date: string };
+type CardSpend = { id: string; cardId: string; label: string; amount: number; currency: Currency; date: string };
 type Loan = {
   id: string; ownerId: string; name: string; lenderType: "bank" | "person" | "institution";
   currency: Currency; principal: number; interestRate: number; tenureMonths: number; startDate: string;
@@ -34,13 +34,16 @@ type Sub = {
   id: string; ownerId: string; provider: string; currency: Currency; amount: number;
   cadence: "monthly" | "yearly"; billingDay: number; nextDate: string; taxPct: number;
 };
+type SchemeCadence = "onetime" | "monthly" | "termly" | "yearly";
+type SchemeItem = { id: string; label: string; amount: number; cadence: SchemeCadence; dueDate: string; billingDay: number; paid: boolean };
+type Scheme = { id: string; ownerId: string; name: string; institution: string; currency: Currency; items: SchemeItem[] };
 
 const SHARED = { id: "shared", name: "Shared", initial: "H" };
 
 const DEFAULT_ACCOUNTS: Account[] = [
-  { id: "a1", ownerId: "shared", name: "Joint savings", type: "bank", currency: "AED", balance: 18420, sensitive: false },
-  { id: "a2", ownerId: "shenaal", name: "Shenaal salary account", type: "bank", currency: "LKR", balance: 340000, sensitive: true },
-  { id: "a3", ownerId: "shalini", name: "Shalini USD savings", type: "bank", currency: "USD", balance: 5200, sensitive: true },
+  { id: "a1", ownerId: "shared", name: "Joint savings", type: "bank", currency: "AED", balance: 18420 },
+  { id: "a2", ownerId: "shenaal", name: "Shenaal salary account", type: "bank", currency: "LKR", balance: 340000 },
+  { id: "a3", ownerId: "shalini", name: "Shalini USD savings", type: "bank", currency: "USD", balance: 5200 },
 ];
 const DEFAULT_CARDS: CardAcct[] = [
   { id: "c1", ownerId: "shenaal", name: "Emirates NBD", network: "visa", last4: "4471", currency: "AED", creditLimit: 15000, limitUsed: 4200, interestRate: 3.2, tenureMonths: 0, outstanding: 4200 },
@@ -52,15 +55,24 @@ const DEFAULT_LOANS: Loan[] = [
 const DEFAULT_SUBS: Sub[] = [
   { id: "s1", ownerId: "shared", provider: "Netflix", currency: "AED", amount: 39, cadence: "monthly", billingDay: 18, nextDate: "", taxPct: 5 },
   { id: "s2", ownerId: "shalini", provider: "iCloud storage", currency: "USD", amount: 3, cadence: "monthly", billingDay: 24, nextDate: "", taxPct: 0 },
-  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: nextYearIso(3), taxPct: 5 },
+  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: monthsFromNowIso(3), taxPct: 5 },
+];
+const DEFAULT_SCHEMES: Scheme[] = [
+  {
+    id: "sc1", ownerId: "shenaal", name: "MBA — Term 2", institution: "University example", currency: "AED",
+    items: [
+      { id: "si1", label: "Term fee", amount: 8500, cadence: "termly", dueDate: monthsFromNowIso(2), billingDay: 1, paid: false },
+      { id: "si2", label: "Monthly materials", amount: 150, cadence: "monthly", dueDate: "", billingDay: 5, paid: false },
+      { id: "si3", label: "Exam fee", amount: 300, cadence: "onetime", dueDate: monthsFromNowIso(1), billingDay: 1, paid: false },
+    ],
+  },
 ];
 
-function nextYearIso(monthsOut: number) {
+function monthsFromNowIso(monthsOut: number) {
   const d = new Date();
   d.setMonth(d.getMonth() + monthsOut);
   return d.toISOString().slice(0, 10);
 }
-
 function monthlySubCost(s: Sub): number {
   const withTax = s.amount * (1 + s.taxPct / 100);
   return s.cadence === "monthly" ? withTax : withTax / 12;
@@ -72,25 +84,31 @@ function loanNextDueDate(l: Loan): Date {
   const day = l.startDate ? new Date(l.startDate).getDate() : 1;
   return nextMonthlyDate(day);
 }
+function schemeItemDate(it: SchemeItem): Date {
+  return it.cadence === "monthly" ? nextMonthlyDate(it.billingDay) : new Date(it.dueDate || Date.now());
+}
+/** Monthly items always count (they recur); other cadences count until marked paid. */
+function schemeItemActive(it: SchemeItem): boolean {
+  return it.cadence === "monthly" || !it.paid;
+}
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function FinancePage() {
   const { members } = useHousehold();
   const owners = useMemo(() => [...members, SHARED], [members]);
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
 
-  // .v2 keys: the pre-rebuild Finance page persisted "finance.accounts" /
-  // "finance.loans" / "finance.subs" under these exact names with a
-  // different, incompatible shape (e.g. loans had no principal/rate/tenure).
-  // Reusing the old keys would hydrate the new EMI math with undefined
-  // fields and silently render "NaN" — bumping the key avoids that
-  // collision. Old data is simply orphaned, not migrated (it was placeholder
-  // data anyway).
-  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v2", DEFAULT_ACCOUNTS);
-  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v2", DEFAULT_CARDS);
-  const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends.v2", []);
+  // .v3: bumped again — Account dropped `sensitive` (blur is now a global
+  // toggle, not per-account), CardSpend gained `currency`. Old .v2 data is
+  // orphaned rather than migrated (still placeholder data).
+  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v3", DEFAULT_ACCOUNTS);
+  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v3", DEFAULT_CARDS);
+  const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends.v3", []);
   const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans.v2", DEFAULT_LOANS);
   const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs.v2", DEFAULT_SUBS);
+  const [schemes, setSchemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", DEFAULT_SCHEMES);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
+  const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
 
   const [filter, setFilter] = useState<string>("all");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -107,45 +125,94 @@ export default function FinancePage() {
   const fCards = cards.filter((c) => inFilter(c.ownerId));
   const fLoans = loans.filter((l) => inFilter(l.ownerId));
   const fSubs = subs.filter((s) => inFilter(s.ownerId));
+  const fSchemes = schemes.filter((sc) => inFilter(sc.ownerId));
 
-  // Monthly committed outflow = loan EMIs + card EMIs (if on a plan) + subscription monthly-equivalent cost.
+  const totalsByCurrency = fAccounts.reduce<Record<string, number>>((acc, a) => {
+    acc[a.currency] = (acc[a.currency] || 0) + a.balance;
+    return acc;
+  }, {});
+
+  const schemeMonthlyContribution = fSchemes
+    .flatMap((sc) => sc.items.map((it) => ({ it, sc })))
+    .filter(({ it }) => schemeItemActive(it))
+    .filter(({ it }) => it.cadence === "monthly" || daysUntil(schemeItemDate(it)) <= 30)
+    .reduce((sum, { it }) => sum + it.amount, 0);
+
+  // Monthly committed outflow = loan EMIs + card EMIs (if on a plan) + subscriptions + scheme items due/recurring this month.
   const monthlyOutflow =
     fLoans.reduce((sum, l) => sum + calcEMI(l.principal, l.interestRate, l.tenureMonths), 0) +
     fCards.reduce((sum, c) => sum + (c.tenureMonths > 0 ? calcEMI(c.outstanding, c.interestRate, c.tenureMonths) : 0), 0) +
-    fSubs.reduce((sum, s) => sum + monthlySubCost(s), 0);
+    fSubs.reduce((sum, s) => sum + monthlySubCost(s), 0) +
+    schemeMonthlyContribution;
   const status = budgetStatus(monthlyOutflow, budget);
   const statusCls = BUDGET_STATUS_CLASSES[status];
 
-  // Upcoming payments (subs + loans) within 14 days, soonest first.
+  // Upcoming payments (subs + loans + scheme items) within 14 days, soonest first.
   const upcoming = [
     ...fSubs.map((s) => ({ label: s.provider, currency: s.currency, amount: s.amount, date: subNextDate(s) })),
-    ...fLoans.map((l) => ({
-      label: l.name,
-      currency: l.currency,
-      amount: calcEMI(l.principal, l.interestRate, l.tenureMonths),
-      date: loanNextDueDate(l),
-    })),
+    ...fLoans.map((l) => ({ label: l.name, currency: l.currency, amount: calcEMI(l.principal, l.interestRate, l.tenureMonths), date: loanNextDueDate(l) })),
+    ...fSchemes.flatMap((sc) =>
+      sc.items.filter(schemeItemActive).map((it) => ({ label: `${sc.name} — ${it.label}`, currency: sc.currency, amount: it.amount, date: schemeItemDate(it) }))
+    ),
   ]
     .map((p) => ({ ...p, days: daysUntil(p.date) }))
     .filter((p) => p.days <= 14)
     .sort((a, b) => a.days - b.days);
 
-  // Next major non-monthly (yearly) payment landing 2–4 months out.
-  const nextMajor = fSubs
-    .filter((s) => s.cadence === "yearly")
-    .map((s) => ({ s, days: daysUntil(subNextDate(s)) }))
+  // Next major non-monthly payment landing 2–4 months out (yearly subs + non-monthly scheme items).
+  const majorCandidates = [
+    ...fSubs.filter((s) => s.cadence === "yearly").map((s) => ({ label: s.provider, currency: s.currency, amount: s.amount * (1 + s.taxPct / 100), owner: ownerName(s.ownerId), date: subNextDate(s) })),
+    ...fSchemes.flatMap((sc) =>
+      sc.items.filter((it) => it.cadence !== "monthly" && schemeItemActive(it)).map((it) => ({ label: `${sc.name} — ${it.label}`, currency: sc.currency, amount: it.amount, owner: ownerName(sc.ownerId), date: schemeItemDate(it) }))
+    ),
+  ]
+    .map((x) => ({ ...x, days: daysUntil(x.date) }))
     .filter((x) => x.days >= 55 && x.days <= 125)
-    .sort((a, b) => a.days - b.days)[0];
+    .sort((a, b) => a.days - b.days);
+  const nextMajor = majorCandidates[0];
 
-  // --- add-item form state ---
-  const [newAccount, setNewAccount] = useState({ ownerId: "shared", name: "", type: "bank" as "bank" | "bnpl", currency: "AED" as Currency, balance: "", sensitive: false });
+  const inputCls = "min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple";
+  const selectCls = "rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none";
+  const smallInputCls = "w-20 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple";
+  const iconBtnCls = "text-gray-500 hover:text-white";
+
+  const OwnerSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={selectCls}>
+      {owners.map((o) => (
+        <option key={o.id} value={o.id}>{o.name}</option>
+      ))}
+    </select>
+  );
+
+  const BlurAmount = ({ id, text }: { id: string; text: string }) => {
+    const shown = !hideBalances || revealed.has(id);
+    return (
+      <button type="button" onClick={() => toggleReveal(id)} className="inline-flex items-center gap-1.5 font-medium text-white">
+        <span className={shown ? "" : "select-none blur-sm"}>{text}</span>
+        {hideBalances && (shown ? <EyeOff size={12} className="text-gray-500" /> : <Eye size={12} className="text-gray-500" />)}
+      </button>
+    );
+  };
+
+  // ---------------- Accounts ----------------
+  const [newAccount, setNewAccount] = useState({ ownerId: "shared", name: "", type: "bank" as "bank" | "bnpl", currency: "AED" as Currency, balance: "" });
   const addAccount = () => {
     if (!newAccount.name.trim() || !newAccount.balance) return;
-    setAccounts((prev) => [...prev, { id: uid(), ownerId: newAccount.ownerId, name: newAccount.name.trim(), type: newAccount.type, currency: newAccount.currency, balance: Number(newAccount.balance), sensitive: newAccount.sensitive }]);
-    setNewAccount({ ownerId: "shared", name: "", type: "bank", currency: "AED", balance: "", sensitive: false });
+    setAccounts((prev) => [...prev, { id: uid(), ownerId: newAccount.ownerId, name: newAccount.name.trim(), type: newAccount.type, currency: newAccount.currency, balance: Number(newAccount.balance) }]);
+    setNewAccount({ ownerId: "shared", name: "", type: "bank", currency: "AED", balance: "" });
   };
   const removeAccount = (id: string) => setAccounts((prev) => prev.filter((a) => a.id !== id));
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [accountDraft, setAccountDraft] = useState<Account | null>(null);
+  const startEditAccount = (a: Account) => { setEditingAccountId(a.id); setAccountDraft({ ...a }); };
+  const saveAccount = () => {
+    if (!accountDraft) return;
+    setAccounts((prev) => prev.map((a) => (a.id === accountDraft.id ? accountDraft : a)));
+    setEditingAccountId(null);
+    setAccountDraft(null);
+  };
 
+  // ---------------- Cards ----------------
   const [newCard, setNewCard] = useState({ ownerId: "shared", name: "", network: "visa" as CardAcct["network"], last4: "", currency: "AED" as Currency, creditLimit: "", limitUsed: "", interestRate: "", tenureMonths: "", outstanding: "" });
   const addCard = () => {
     if (!newCard.name.trim() || newCard.last4.length !== 4) return;
@@ -160,55 +227,95 @@ export default function FinancePage() {
     setCards((prev) => prev.filter((c) => c.id !== id));
     setCardSpends((prev) => prev.filter((s) => s.cardId !== id));
   };
-  const [spendDraft, setSpendDraft] = useState<Record<string, { label: string; amount: string }>>({});
-  const addSpend = (cardId: string) => {
-    const d = spendDraft[cardId];
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [cardDraft, setCardDraft] = useState<CardAcct | null>(null);
+  const startEditCard = (c: CardAcct) => { setEditingCardId(c.id); setCardDraft({ ...c }); };
+  const saveCard = () => {
+    if (!cardDraft) return;
+    setCards((prev) => prev.map((c) => (c.id === cardDraft.id ? cardDraft : c)));
+    setEditingCardId(null);
+    setCardDraft(null);
+  };
+  const [spendDraft, setSpendDraft] = useState<Record<string, { label: string; amount: string; currency: Currency }>>({});
+  const addSpend = (card: CardAcct) => {
+    const d = spendDraft[card.id];
     if (!d?.label?.trim() || !d?.amount) return;
-    setCardSpends((prev) => [...prev, { id: uid(), cardId, label: d.label.trim(), amount: Number(d.amount), date: new Date().toISOString().slice(0, 10) }]);
-    setCards((prev) => prev.map((c) => (c.id === cardId ? { ...c, limitUsed: c.limitUsed + Number(d.amount), outstanding: c.outstanding + Number(d.amount) } : c)));
-    setSpendDraft((prev) => ({ ...prev, [cardId]: { label: "", amount: "" } }));
+    const currency = d.currency || card.currency;
+    setCardSpends((prev) => [...prev, { id: uid(), cardId: card.id, label: d.label.trim(), amount: Number(d.amount), currency, date: todayIso() }]);
+    setCards((prev) => prev.map((c) => (c.id === card.id ? { ...c, limitUsed: c.limitUsed + Number(d.amount), outstanding: c.outstanding + Number(d.amount) } : c)));
+    setSpendDraft((prev) => ({ ...prev, [card.id]: { label: "", amount: "", currency: card.currency } }));
   };
   const removeSpend = (spend: CardSpend) => {
     setCardSpends((prev) => prev.filter((s) => s.id !== spend.id));
     setCards((prev) => prev.map((c) => (c.id === spend.cardId ? { ...c, limitUsed: Math.max(0, c.limitUsed - spend.amount), outstanding: Math.max(0, c.outstanding - spend.amount) } : c)));
   };
 
-  const [newLoan, setNewLoan] = useState({ ownerId: "shared", name: "", lenderType: "bank" as Loan["lenderType"], currency: "AED" as Currency, principal: "", interestRate: "", tenureMonths: "", startDate: new Date().toISOString().slice(0, 10) });
+  // ---------------- Loans ----------------
+  const [newLoan, setNewLoan] = useState({ ownerId: "shared", name: "", lenderType: "bank" as Loan["lenderType"], currency: "AED" as Currency, principal: "", interestRate: "", tenureMonths: "", startDate: todayIso() });
   const addLoan = () => {
     if (!newLoan.name.trim() || !newLoan.principal || !newLoan.tenureMonths) return;
     setLoans((prev) => [...prev, { id: uid(), ownerId: newLoan.ownerId, name: newLoan.name.trim(), lenderType: newLoan.lenderType, currency: newLoan.currency, principal: Number(newLoan.principal), interestRate: Number(newLoan.interestRate) || 0, tenureMonths: Number(newLoan.tenureMonths), startDate: newLoan.startDate }]);
-    setNewLoan({ ownerId: "shared", name: "", lenderType: "bank", currency: "AED", principal: "", interestRate: "", tenureMonths: "", startDate: new Date().toISOString().slice(0, 10) });
+    setNewLoan({ ownerId: "shared", name: "", lenderType: "bank", currency: "AED", principal: "", interestRate: "", tenureMonths: "", startDate: todayIso() });
   };
   const removeLoan = (id: string) => setLoans((prev) => prev.filter((l) => l.id !== id));
+  const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
+  const [loanDraft, setLoanDraft] = useState<Loan | null>(null);
+  const startEditLoan = (l: Loan) => { setEditingLoanId(l.id); setLoanDraft({ ...l }); };
+  const saveLoan = () => {
+    if (!loanDraft) return;
+    setLoans((prev) => prev.map((l) => (l.id === loanDraft.id ? loanDraft : l)));
+    setEditingLoanId(null);
+    setLoanDraft(null);
+  };
 
-  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: new Date().toISOString().slice(0, 10), taxPct: "0" });
+  // ---------------- Subscriptions ----------------
+  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: todayIso(), taxPct: "0" });
   const addSub = () => {
     if (!newSub.provider.trim() || !newSub.amount) return;
     setSubs((prev) => [...prev, { id: uid(), ownerId: newSub.ownerId, provider: newSub.provider.trim(), currency: newSub.currency, amount: Number(newSub.amount), cadence: newSub.cadence, billingDay: Number(newSub.billingDay) || 1, nextDate: newSub.nextDate, taxPct: Number(newSub.taxPct) || 0 }]);
-    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: new Date().toISOString().slice(0, 10), taxPct: "0" });
+    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: todayIso(), taxPct: "0" });
   };
   const removeSub = (id: string) => setSubs((prev) => prev.filter((s) => s.id !== id));
-
-  const inputCls = "min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple";
-  const selectCls = "rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none";
-
-  const OwnerSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={selectCls}>
-      {owners.map((o) => (
-        <option key={o.id} value={o.id}>{o.name}</option>
-      ))}
-    </select>
-  );
-
-  const BlurAmount = ({ id, text }: { id: string; text: string }) => {
-    const shown = revealed.has(id);
-    return (
-      <button type="button" onClick={() => toggleReveal(id)} className="inline-flex items-center gap-1.5 font-medium text-white">
-        <span className={shown ? "" : "select-none blur-sm"}>{text}</span>
-        {shown ? <EyeOff size={12} className="text-gray-500" /> : <Eye size={12} className="text-gray-500" />}
-      </button>
-    );
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [subDraft, setSubDraft] = useState<Sub | null>(null);
+  const startEditSub = (s: Sub) => { setEditingSubId(s.id); setSubDraft({ ...s }); };
+  const saveSub = () => {
+    if (!subDraft) return;
+    setSubs((prev) => prev.map((s) => (s.id === subDraft.id ? subDraft : s)));
+    setEditingSubId(null);
+    setSubDraft(null);
   };
+
+  // ---------------- Payment schemes (education/term-fee style plans) ----------------
+  const [newScheme, setNewScheme] = useState({ ownerId: "shared", name: "", institution: "", currency: "AED" as Currency });
+  const addScheme = () => {
+    if (!newScheme.name.trim()) return;
+    setSchemes((prev) => [...prev, { id: uid(), ownerId: newScheme.ownerId, name: newScheme.name.trim(), institution: newScheme.institution.trim(), currency: newScheme.currency, items: [] }]);
+    setNewScheme({ ownerId: "shared", name: "", institution: "", currency: "AED" });
+  };
+  const removeScheme = (id: string) => setSchemes((prev) => prev.filter((sc) => sc.id !== id));
+  const [editingSchemeId, setEditingSchemeId] = useState<string | null>(null);
+  const [schemeDraft, setSchemeDraft] = useState<Scheme | null>(null);
+  const startEditScheme = (sc: Scheme) => { setEditingSchemeId(sc.id); setSchemeDraft({ ...sc }); };
+  const saveScheme = () => {
+    if (!schemeDraft) return;
+    setSchemes((prev) => prev.map((sc) => (sc.id === schemeDraft.id ? { ...schemeDraft, items: sc.items } : sc)));
+    setEditingSchemeId(null);
+    setSchemeDraft(null);
+  };
+
+  const [itemDraft, setItemDraft] = useState<Record<string, { label: string; amount: string; cadence: SchemeCadence; dueDate: string; billingDay: string }>>({});
+  const addSchemeItem = (schemeId: string) => {
+    const d = itemDraft[schemeId];
+    if (!d?.label?.trim() || !d?.amount) return;
+    const item: SchemeItem = { id: uid(), label: d.label.trim(), amount: Number(d.amount), cadence: d.cadence, dueDate: d.dueDate || todayIso(), billingDay: Number(d.billingDay) || 1, paid: false };
+    setSchemes((prev) => prev.map((sc) => (sc.id === schemeId ? { ...sc, items: [...sc.items, item] } : sc)));
+    setItemDraft((prev) => ({ ...prev, [schemeId]: { label: "", amount: "", cadence: "onetime", dueDate: todayIso(), billingDay: "1" } }));
+  };
+  const removeSchemeItem = (schemeId: string, itemId: string) =>
+    setSchemes((prev) => prev.map((sc) => (sc.id === schemeId ? { ...sc, items: sc.items.filter((it) => it.id !== itemId) } : sc)));
+  const toggleItemPaid = (schemeId: string, itemId: string) =>
+    setSchemes((prev) => prev.map((sc) => (sc.id === schemeId ? { ...sc, items: sc.items.map((it) => (it.id === itemId ? { ...it, paid: !it.paid } : it)) } : sc)));
 
   return (
     <div className="flex min-h-screen bg-base-bg">
@@ -223,6 +330,15 @@ export default function FinancePage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setHideBalances((v) => !v)}
+              className="glass-card flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white"
+              title={hideBalances ? "Balances are hidden by default — click any amount to reveal it" : "All balances are showing"}
+            >
+              {hideBalances ? <EyeOff size={13} /> : <Eye size={13} />}
+              {hideBalances ? "Balances hidden" : "Balances visible"}
+            </button>
             {[{ id: "all", name: "Household" }, ...owners].map((o) => (
               <button
                 key={o.id}
@@ -245,7 +361,9 @@ export default function FinancePage() {
               <span className={`h-3 w-3 rounded-full ${statusCls.bg}`} />
               <div>
                 <p className="text-sm text-gray-200">
-                  This month&rsquo;s committed outflow: <span className={`font-semibold ${statusCls.text}`}>{Math.round(monthlyOutflow).toLocaleString()}</span> (loan EMIs + card plans + subscriptions, mixed currencies summed at face value)
+                  This month&rsquo;s committed outflow:{" "}
+                  <BlurAmount id="outflow-total" text={Math.round(monthlyOutflow).toLocaleString()} />
+                  {" "}(loan EMIs + card plans + subscriptions + due scheme items, mixed currencies summed at face value)
                 </p>
                 <p className="text-xs text-gray-500">
                   {budget > 0 ? `${Math.round((monthlyOutflow / budget) * 100)}% of your ${budget.toLocaleString()} monthly budget` : "Set a monthly budget to get a red/orange/green status."}
@@ -289,12 +407,12 @@ export default function FinancePage() {
             <div className="relative z-10">
               {nextMajor ? (
                 <div className="text-sm">
-                  <p className="text-gray-200">{nextMajor.s.provider}</p>
-                  <p className="mt-1 text-lg font-semibold text-white">{formatMoney(nextMajor.s.amount * (1 + nextMajor.s.taxPct / 100), nextMajor.s.currency)}</p>
-                  <p className="text-xs text-gray-500">{formatDaysUntil(nextMajor.days)} · {ownerName(nextMajor.s.ownerId)}</p>
+                  <p className="text-gray-200">{nextMajor.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-white">{formatMoney(nextMajor.amount, nextMajor.currency)}</p>
+                  <p className="text-xs text-gray-500">{formatDaysUntil(nextMajor.days)} · {nextMajor.owner}</p>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500">No yearly/non-monthly bills landing 2–4 months out.</p>
+                <p className="text-xs text-gray-500">No yearly/term bills landing 2–4 months out.</p>
               )}
             </div>
           </section>
@@ -302,26 +420,46 @@ export default function FinancePage() {
 
         {/* Accounts */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-4 font-medium text-white">Bank &amp; BNPL accounts</h2>
+          <h2 className="relative z-10 mb-2 font-medium text-white">Bank &amp; BNPL accounts</h2>
+          {Object.keys(totalsByCurrency).length > 0 && (
+            <p className="relative z-10 mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+              {Object.entries(totalsByCurrency).map(([cur, total]) => (
+                <span key={cur}>
+                  Total {cur}: <BlurAmount id={`total-${cur}`} text={total.toLocaleString()} />
+                </span>
+              ))}
+            </p>
+          )}
           <div className="relative z-10 space-y-3">
-            {fAccounts.map((a) => (
-              <div key={a.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="text-gray-200">{a.name}</p>
-                  <p className="text-xs text-gray-500">{a.type === "bnpl" ? "BNPL" : "Bank"} · {ownerName(a.ownerId)}</p>
+            {fAccounts.map((a) =>
+              editingAccountId === a.id && accountDraft ? (
+                <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
+                  <OwnerSelect value={accountDraft.ownerId} onChange={(v) => setAccountDraft({ ...accountDraft, ownerId: v })} />
+                  <input value={accountDraft.name} onChange={(e) => setAccountDraft({ ...accountDraft, name: e.target.value })} className={inputCls} />
+                  <select value={accountDraft.type} onChange={(e) => setAccountDraft({ ...accountDraft, type: e.target.value as "bank" | "bnpl" })} className={selectCls}>
+                    <option value="bank">Bank</option><option value="bnpl">BNPL</option>
+                  </select>
+                  <select value={accountDraft.currency} onChange={(e) => setAccountDraft({ ...accountDraft, currency: e.target.value as Currency })} className={selectCls}>
+                    <option>AED</option><option>LKR</option><option>USD</option>
+                  </select>
+                  <input type="number" value={accountDraft.balance} onChange={(e) => setAccountDraft({ ...accountDraft, balance: Number(e.target.value) })} className={smallInputCls} />
+                  <button type="button" onClick={saveAccount} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                  <button type="button" onClick={() => setEditingAccountId(null)} className={iconBtnCls}><X size={16} /></button>
                 </div>
-                <div className="flex items-center gap-3">
-                  {a.sensitive ? (
+              ) : (
+                <div key={a.id} className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="text-gray-200">{a.name}</p>
+                    <p className="text-xs text-gray-500">{a.type === "bnpl" ? "BNPL" : "Bank"} · {ownerName(a.ownerId)}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <BlurAmount id={a.id} text={formatMoney(a.balance, a.currency)} />
-                  ) : (
-                    <p className="font-medium text-white">{formatMoney(a.balance, a.currency)}</p>
-                  )}
-                  <button type="button" onClick={() => removeAccount(a.id)} className="text-gray-500 hover:text-white">
-                    <X size={14} />
-                  </button>
+                    <button type="button" onClick={() => startEditAccount(a)} className={iconBtnCls}><Pencil size={13} /></button>
+                    <button type="button" onClick={() => removeAccount(a.id)} className={iconBtnCls}><X size={14} /></button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
             {fAccounts.length === 0 && <p className="text-xs text-gray-500">No accounts for this filter.</p>}
           </div>
           <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
@@ -334,11 +472,7 @@ export default function FinancePage() {
             <select value={newAccount.currency} onChange={(e) => setNewAccount((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
               <option>AED</option><option>LKR</option><option>USD</option>
             </select>
-            <input placeholder="Balance" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <label className="flex items-center gap-1.5 text-xs text-gray-400">
-              <input type="checkbox" checked={newAccount.sensitive} onChange={(e) => setNewAccount((s) => ({ ...s, sensitive: e.target.checked }))} />
-              Blur (salary)
-            </label>
+            <input placeholder="Balance" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className={smallInputCls} />
             <button type="button" onClick={addAccount} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -353,7 +487,8 @@ export default function FinancePage() {
               const emi = c.tenureMonths > 0 ? calcEMI(c.outstanding, c.interestRate, c.tenureMonths) : 0;
               const usedPct = c.creditLimit > 0 ? Math.min(100, (c.limitUsed / c.creditLimit) * 100) : 0;
               const spends = cardSpends.filter((s) => s.cardId === c.id);
-              const draft = spendDraft[c.id] ?? { label: "", amount: "" };
+              const draft = spendDraft[c.id] ?? { label: "", amount: "", currency: c.currency };
+              const editing = editingCardId === c.id && cardDraft;
               return (
                 <details key={c.id} className="glossy-gradient group rounded-xl2 bg-gradient-to-br from-accent-purple to-accent-blue p-4">
                   <summary className="relative z-10 flex cursor-pointer list-none items-center justify-between text-white">
@@ -367,31 +502,72 @@ export default function FinancePage() {
                     <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
                   </summary>
                   <div className="relative z-10 mt-3 space-y-2 rounded-xl bg-black/20 p-3 text-xs text-white">
-                    <div className="h-1.5 w-full rounded-full bg-white/20">
-                      <div className="h-1.5 rounded-full bg-white" style={{ width: `${usedPct}%` }} />
-                    </div>
-                    <p>{formatMoney(c.limitUsed, c.currency)} used of {formatMoney(c.creditLimit, c.currency)} ({Math.round(usedPct)}%)</p>
-                    <p>Outstanding: {formatMoney(c.outstanding, c.currency)} · {c.interestRate}% APR</p>
-                    {c.tenureMonths > 0 && <p>EMI plan: {formatMoney(emi, c.currency)}/mo × {c.tenureMonths}mo</p>}
-                    <div className="border-t border-white/10 pt-2">
-                      <p className="mb-1 font-medium">Logged spend</p>
-                      {spends.length === 0 && <p className="opacity-70">None logged yet.</p>}
-                      {spends.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between py-0.5">
-                          <span>{s.label}</span>
-                          <span className="flex items-center gap-1.5">
-                            {formatMoney(s.amount, c.currency)}
-                            <button type="button" onClick={() => removeSpend(s)} className="opacity-60 hover:opacity-100"><X size={10} /></button>
-                          </span>
+                    {editing && cardDraft ? (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          <input value={cardDraft.name} onChange={(e) => setCardDraft({ ...cardDraft, name: e.target.value })} placeholder="Name" className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <input value={cardDraft.last4} maxLength={4} onChange={(e) => setCardDraft({ ...cardDraft, last4: e.target.value.replace(/\D/g, "") })} placeholder="Last4" className="w-14 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
                         </div>
-                      ))}
-                      <div className="mt-2 flex gap-1.5">
-                        <input placeholder="Label" value={draft.label} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, label: e.target.value } }))} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                        <input placeholder="Amt" type="number" value={draft.amount} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, amount: e.target.value } }))} className="w-16 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                        <button type="button" onClick={() => addSpend(c.id)} className="rounded-lg bg-white/20 px-2 py-1">+</button>
+                        <div className="flex flex-wrap gap-1.5">
+                          <select value={cardDraft.network} onChange={(e) => setCardDraft({ ...cardDraft, network: e.target.value as CardAcct["network"] })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
+                            <option className="text-black" value="visa">Visa</option><option className="text-black" value="mastercard">Mastercard</option><option className="text-black" value="other">Other</option>
+                          </select>
+                          <select value={cardDraft.currency} onChange={(e) => setCardDraft({ ...cardDraft, currency: e.target.value as Currency })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
+                            <option className="text-black">AED</option><option className="text-black">LKR</option><option className="text-black">USD</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <input type="number" value={cardDraft.creditLimit} onChange={(e) => setCardDraft({ ...cardDraft, creditLimit: Number(e.target.value) })} placeholder="Credit limit" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} placeholder="Limit used" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <input type="number" value={cardDraft.outstanding} onChange={(e) => setCardDraft({ ...cardDraft, outstanding: Number(e.target.value) })} placeholder="Outstanding" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} placeholder="APR %" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} placeholder="EMI months" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <OwnerSelect value={cardDraft.ownerId} onChange={(v) => setCardDraft({ ...cardDraft, ownerId: v })} />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button type="button" onClick={saveCard} className="flex items-center gap-1 rounded-lg bg-white/20 px-2 py-1"><Check size={12} /> Save</button>
+                          <button type="button" onClick={() => setEditingCardId(null)} className="opacity-70 hover:opacity-100">Cancel</button>
+                        </div>
                       </div>
-                    </div>
-                    <button type="button" onClick={() => removeCard(c.id)} className="text-white/70 hover:text-white">Remove card</button>
+                    ) : (
+                      <>
+                        <div className="h-1.5 w-full rounded-full bg-white/20">
+                          <div className="h-1.5 rounded-full bg-white" style={{ width: `${usedPct}%` }} />
+                        </div>
+                        <p>
+                          <BlurAmount id={`card-used-${c.id}`} text={formatMoney(c.limitUsed, c.currency)} /> used of {formatMoney(c.creditLimit, c.currency)} ({Math.round(usedPct)}%)
+                        </p>
+                        <p>
+                          Outstanding: <BlurAmount id={`card-out-${c.id}`} text={formatMoney(c.outstanding, c.currency)} /> · {c.interestRate}% APR
+                        </p>
+                        {c.tenureMonths > 0 && <p>EMI plan: {formatMoney(emi, c.currency)}/mo × {c.tenureMonths}mo</p>}
+                        <div className="border-t border-white/10 pt-2">
+                          <p className="mb-1 font-medium">Logged spend</p>
+                          {spends.length === 0 && <p className="opacity-70">None logged yet.</p>}
+                          {spends.map((s) => (
+                            <div key={s.id} className="flex items-center justify-between py-0.5">
+                              <span>{s.label}</span>
+                              <span className="flex items-center gap-1.5">
+                                {formatMoney(s.amount, s.currency)}
+                                <button type="button" onClick={() => removeSpend(s)} className="opacity-60 hover:opacity-100"><X size={10} /></button>
+                              </span>
+                            </div>
+                          ))}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <input placeholder="Label" value={draft.label} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, label: e.target.value } }))} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                            <input placeholder="Amt" type="number" value={draft.amount} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, amount: e.target.value } }))} className="w-16 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                            <select value={draft.currency} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, currency: e.target.value as Currency } }))} className="rounded-lg bg-white/10 px-1.5 py-1 text-white outline-none">
+                              <option className="text-black">AED</option><option className="text-black">LKR</option><option className="text-black">USD</option>
+                            </select>
+                            <button type="button" onClick={() => addSpend(c)} className="rounded-lg bg-white/20 px-2 py-1">+</button>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 pt-1">
+                          <button type="button" onClick={() => startEditCard(c)} className="flex items-center gap-1 text-white/70 hover:text-white"><Pencil size={11} /> Edit</button>
+                          <button type="button" onClick={() => removeCard(c.id)} className="text-white/70 hover:text-white">Remove card</button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </details>
               );
@@ -424,6 +600,26 @@ export default function FinancePage() {
           <h2 className="relative z-10 mb-4 font-medium text-white">Loans &amp; installments</h2>
           <div className="relative z-10 space-y-4">
             {fLoans.map((l) => {
+              if (editingLoanId === l.id && loanDraft) {
+                return (
+                  <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
+                    <OwnerSelect value={loanDraft.ownerId} onChange={(v) => setLoanDraft({ ...loanDraft, ownerId: v })} />
+                    <input value={loanDraft.name} onChange={(e) => setLoanDraft({ ...loanDraft, name: e.target.value })} className={inputCls} />
+                    <select value={loanDraft.lenderType} onChange={(e) => setLoanDraft({ ...loanDraft, lenderType: e.target.value as Loan["lenderType"] })} className={selectCls}>
+                      <option value="bank">Bank</option><option value="person">Person</option><option value="institution">Institution</option>
+                    </select>
+                    <select value={loanDraft.currency} onChange={(e) => setLoanDraft({ ...loanDraft, currency: e.target.value as Currency })} className={selectCls}>
+                      <option>AED</option><option>LKR</option><option>USD</option>
+                    </select>
+                    <input type="number" value={loanDraft.principal} onChange={(e) => setLoanDraft({ ...loanDraft, principal: Number(e.target.value) })} placeholder="Principal" className={smallInputCls} />
+                    <input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} placeholder="APR %" className={smallInputCls} />
+                    <input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} placeholder="Tenure" className={smallInputCls} />
+                    <input type="date" value={loanDraft.startDate} onChange={(e) => setLoanDraft({ ...loanDraft, startDate: e.target.value })} className={selectCls} />
+                    <button type="button" onClick={saveLoan} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                    <button type="button" onClick={() => setEditingLoanId(null)} className={iconBtnCls}><X size={16} /></button>
+                  </div>
+                );
+              }
               const emi = calcEMI(l.principal, l.interestRate, l.tenureMonths);
               const elapsed = monthsElapsedSince(l.startDate);
               const remaining = calcRemainingBalance(l.principal, l.interestRate, l.tenureMonths, elapsed);
@@ -434,9 +630,8 @@ export default function FinancePage() {
                     <p className="text-gray-200">{l.name} <span className="text-xs text-gray-500">({l.lenderType} · {ownerName(l.ownerId)})</span></p>
                     <div className="flex items-center gap-2">
                       <p className="text-gray-400">{monthsLeft} months left</p>
-                      <button type="button" onClick={() => removeLoan(l.id)} className="text-gray-500 hover:text-white">
-                        <X size={12} />
-                      </button>
+                      <button type="button" onClick={() => startEditLoan(l)} className={iconBtnCls}><Pencil size={13} /></button>
+                      <button type="button" onClick={() => removeLoan(l.id)} className={iconBtnCls}><X size={12} /></button>
                     </div>
                   </div>
                   <div className="mt-1 h-1.5 w-full rounded-full bg-base-card">
@@ -469,11 +664,130 @@ export default function FinancePage() {
           </div>
         </section>
 
+        {/* Payment schemes — education / multi-line-item plans */}
+        <section className="glass-card rounded-xl2 p-5">
+          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+            <GraduationCap size={16} /> Payment schemes
+          </h2>
+          <p className="relative z-10 mb-4 text-xs text-gray-500">
+            For plans with several irregular line items — e.g. a university programme with a termly fee, monthly materials cost, and one-off exam fees.
+          </p>
+          <div className="relative z-10 space-y-5">
+            {fSchemes.map((sc) => {
+              const d = itemDraft[sc.id] ?? { label: "", amount: "", cadence: "onetime" as SchemeCadence, dueDate: todayIso(), billingDay: "1" };
+              const editing = editingSchemeId === sc.id && schemeDraft;
+              return (
+                <div key={sc.id} className="rounded-xl border border-base-border p-3">
+                  {editing && schemeDraft ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <OwnerSelect value={schemeDraft.ownerId} onChange={(v) => setSchemeDraft({ ...schemeDraft, ownerId: v })} />
+                      <input value={schemeDraft.name} onChange={(e) => setSchemeDraft({ ...schemeDraft, name: e.target.value })} placeholder="Scheme name" className={inputCls} />
+                      <input value={schemeDraft.institution} onChange={(e) => setSchemeDraft({ ...schemeDraft, institution: e.target.value })} placeholder="Institution" className={inputCls} />
+                      <select value={schemeDraft.currency} onChange={(e) => setSchemeDraft({ ...schemeDraft, currency: e.target.value as Currency })} className={selectCls}>
+                        <option>AED</option><option>LKR</option><option>USD</option>
+                      </select>
+                      <button type="button" onClick={saveScheme} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                      <button type="button" onClick={() => setEditingSchemeId(null)} className={iconBtnCls}><X size={16} /></button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-200">{sc.name}</p>
+                        <p className="text-xs text-gray-500">{sc.institution || "No institution set"} · {ownerName(sc.ownerId)} · {sc.currency}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => startEditScheme(sc)} className={iconBtnCls}><Pencil size={13} /></button>
+                        <button type="button" onClick={() => removeScheme(sc.id)} className={iconBtnCls}><X size={14} /></button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 space-y-1.5 border-t border-base-border pt-3">
+                    {sc.items.map((it) => {
+                      const days = daysUntil(schemeItemDate(it));
+                      return (
+                        <div key={it.id} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            {it.cadence !== "monthly" && (
+                              <input type="checkbox" checked={it.paid} onChange={() => toggleItemPaid(sc.id, it.id)} title="Mark paid" />
+                            )}
+                            <span className={it.paid ? "text-gray-500 line-through" : "text-gray-300"}>{it.label}</span>
+                            <span className="rounded-full bg-base-card px-1.5 py-0.5 text-[10px] text-gray-500">{it.cadence}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-300">{formatMoney(it.amount, sc.currency)}</span>
+                            {!it.paid && <span className="text-gray-500">{formatDaysUntil(days)}</span>}
+                            <button type="button" onClick={() => removeSchemeItem(sc.id, it.id)} className={iconBtnCls}><X size={11} /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {sc.items.length === 0 && <p className="text-xs text-gray-500">No line items yet.</p>}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <input placeholder="Line item (e.g. Exam fee)" value={d.label} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, label: e.target.value } }))} className={inputCls} />
+                      <input placeholder="Amount" type="number" value={d.amount} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, amount: e.target.value } }))} className={smallInputCls} />
+                      <select value={d.cadence} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, cadence: e.target.value as SchemeCadence } }))} className={selectCls}>
+                        <option value="onetime">One-time</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="termly">Termly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                      {d.cadence === "monthly" ? (
+                        <input type="number" min={1} max={31} placeholder="Billing day" value={d.billingDay} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, billingDay: e.target.value } }))} className={smallInputCls} />
+                      ) : (
+                        <input type="date" value={d.dueDate} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, dueDate: e.target.value } }))} className={selectCls} />
+                      )}
+                      <button type="button" onClick={() => addSchemeItem(sc.id)} className="flex items-center gap-1 rounded-xl bg-accent-purple/80 px-3 py-2 text-xs text-white">
+                        <Plus size={12} /> Add line
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {fSchemes.length === 0 && <p className="text-xs text-gray-500">No payment schemes for this filter.</p>}
+          </div>
+          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
+            <OwnerSelect value={newScheme.ownerId} onChange={(v) => setNewScheme((s) => ({ ...s, ownerId: v }))} />
+            <input placeholder="Scheme name (e.g. MBA — Term 3)" value={newScheme.name} onChange={(e) => setNewScheme((s) => ({ ...s, name: e.target.value }))} className={inputCls} />
+            <input placeholder="Institution" value={newScheme.institution} onChange={(e) => setNewScheme((s) => ({ ...s, institution: e.target.value }))} className={inputCls} />
+            <select value={newScheme.currency} onChange={(e) => setNewScheme((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+              <option>AED</option><option>LKR</option><option>USD</option>
+            </select>
+            <button type="button" onClick={addScheme} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
+              <Plus size={14} /> Add scheme
+            </button>
+          </div>
+        </section>
+
         {/* Subscriptions */}
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-4 font-medium text-white">Subscriptions</h2>
           <div className="relative z-10 space-y-3">
             {fSubs.map((s) => {
+              if (editingSubId === s.id && subDraft) {
+                return (
+                  <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
+                    <OwnerSelect value={subDraft.ownerId} onChange={(v) => setSubDraft({ ...subDraft, ownerId: v })} />
+                    <input value={subDraft.provider} onChange={(e) => setSubDraft({ ...subDraft, provider: e.target.value })} className={inputCls} />
+                    <input type="number" value={subDraft.amount} onChange={(e) => setSubDraft({ ...subDraft, amount: Number(e.target.value) })} className={smallInputCls} />
+                    <select value={subDraft.currency} onChange={(e) => setSubDraft({ ...subDraft, currency: e.target.value as Currency })} className={selectCls}>
+                      <option>AED</option><option>LKR</option><option>USD</option>
+                    </select>
+                    <select value={subDraft.cadence} onChange={(e) => setSubDraft({ ...subDraft, cadence: e.target.value as Sub["cadence"] })} className={selectCls}>
+                      <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                    </select>
+                    {subDraft.cadence === "monthly" ? (
+                      <input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} placeholder="Billing day" />
+                    ) : (
+                      <input type="date" value={subDraft.nextDate} onChange={(e) => setSubDraft({ ...subDraft, nextDate: e.target.value })} className={selectCls} />
+                    )}
+                    <input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" placeholder="Tax %" />
+                    <button type="button" onClick={saveSub} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                    <button type="button" onClick={() => setEditingSubId(null)} className={iconBtnCls}><X size={16} /></button>
+                  </div>
+                );
+              }
               const days = daysUntil(subNextDate(s));
               return (
                 <div key={s.id} className="flex items-center justify-between text-sm">
@@ -486,9 +800,8 @@ export default function FinancePage() {
                       <p className="text-gray-200">{formatMoney(s.amount * (1 + s.taxPct / 100), s.currency)}</p>
                       <p className="text-xs text-gray-500">{formatDaysUntil(days)}</p>
                     </div>
-                    <button type="button" onClick={() => removeSub(s.id)} className="text-gray-500 hover:text-white">
-                      <X size={14} />
-                    </button>
+                    <button type="button" onClick={() => startEditSub(s)} className={iconBtnCls}><Pencil size={13} /></button>
+                    <button type="button" onClick={() => removeSub(s.id)} className={iconBtnCls}><X size={14} /></button>
                   </div>
                 </div>
               );
