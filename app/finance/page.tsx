@@ -184,6 +184,18 @@ export default function FinancePage() {
     </select>
   );
 
+  // Edit-mode fields always have a bound value (even 0), so the browser
+  // never shows the placeholder to explain what the field is — a blank
+  // "0" next to another blank "0" is meaningless. Every editable numeric/
+  // select field gets a persistent micro-label instead of relying on
+  // placeholder text.
+  const Field = ({ label, children, dark }: { label: string; children: React.ReactNode; dark?: boolean }) => (
+    <label className="flex flex-col gap-0.5">
+      <span className={`text-[9px] font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>{label}</span>
+      {children}
+    </label>
+  );
+
   const BlurAmount = ({ id, text }: { id: string; text: string }) => {
     const shown = !hideBalances || revealed.has(id);
     return (
@@ -433,16 +445,20 @@ export default function FinancePage() {
           <div className="relative z-10 space-y-3">
             {fAccounts.map((a) =>
               editingAccountId === a.id && accountDraft ? (
-                <div key={a.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
-                  <OwnerSelect value={accountDraft.ownerId} onChange={(v) => setAccountDraft({ ...accountDraft, ownerId: v })} />
-                  <input value={accountDraft.name} onChange={(e) => setAccountDraft({ ...accountDraft, name: e.target.value })} className={inputCls} />
-                  <select value={accountDraft.type} onChange={(e) => setAccountDraft({ ...accountDraft, type: e.target.value as "bank" | "bnpl" })} className={selectCls}>
-                    <option value="bank">Bank</option><option value="bnpl">BNPL</option>
-                  </select>
-                  <select value={accountDraft.currency} onChange={(e) => setAccountDraft({ ...accountDraft, currency: e.target.value as Currency })} className={selectCls}>
-                    <option>AED</option><option>LKR</option><option>USD</option>
-                  </select>
-                  <input type="number" value={accountDraft.balance} onChange={(e) => setAccountDraft({ ...accountDraft, balance: Number(e.target.value) })} className={smallInputCls} />
+                <div key={a.id} className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
+                  <Field label="Owner"><OwnerSelect value={accountDraft.ownerId} onChange={(v) => setAccountDraft({ ...accountDraft, ownerId: v })} /></Field>
+                  <Field label="Name"><input value={accountDraft.name} onChange={(e) => setAccountDraft({ ...accountDraft, name: e.target.value })} className={inputCls} /></Field>
+                  <Field label="Type">
+                    <select value={accountDraft.type} onChange={(e) => setAccountDraft({ ...accountDraft, type: e.target.value as "bank" | "bnpl" })} className={selectCls}>
+                      <option value="bank">Bank</option><option value="bnpl">BNPL</option>
+                    </select>
+                  </Field>
+                  <Field label="Currency">
+                    <select value={accountDraft.currency} onChange={(e) => setAccountDraft({ ...accountDraft, currency: e.target.value as Currency })} className={selectCls}>
+                      <option>AED</option><option>LKR</option><option>USD</option>
+                    </select>
+                  </Field>
+                  <Field label="Balance"><input type="number" value={accountDraft.balance} onChange={(e) => setAccountDraft({ ...accountDraft, balance: Number(e.target.value) })} className={smallInputCls} /></Field>
                   <button type="button" onClick={saveAccount} className="text-accent-green hover:text-white"><Check size={16} /></button>
                   <button type="button" onClick={() => setEditingAccountId(null)} className={iconBtnCls}><X size={16} /></button>
                 </div>
@@ -505,24 +521,28 @@ export default function FinancePage() {
                     {editing && cardDraft ? (
                       <div className="space-y-1.5">
                         <div className="flex flex-wrap gap-1.5">
-                          <input value={cardDraft.name} onChange={(e) => setCardDraft({ ...cardDraft, name: e.target.value })} placeholder="Name" className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <input value={cardDraft.last4} maxLength={4} onChange={(e) => setCardDraft({ ...cardDraft, last4: e.target.value.replace(/\D/g, "") })} placeholder="Last4" className="w-14 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                          <Field label="Name" dark><input value={cardDraft.name} onChange={(e) => setCardDraft({ ...cardDraft, name: e.target.value })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="Last 4" dark><input value={cardDraft.last4} maxLength={4} onChange={(e) => setCardDraft({ ...cardDraft, last4: e.target.value.replace(/\D/g, "") })} className="w-14 rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          <select value={cardDraft.network} onChange={(e) => setCardDraft({ ...cardDraft, network: e.target.value as CardAcct["network"] })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
-                            <option className="text-black" value="visa">Visa</option><option className="text-black" value="mastercard">Mastercard</option><option className="text-black" value="other">Other</option>
-                          </select>
-                          <select value={cardDraft.currency} onChange={(e) => setCardDraft({ ...cardDraft, currency: e.target.value as Currency })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
-                            <option className="text-black">AED</option><option className="text-black">LKR</option><option className="text-black">USD</option>
-                          </select>
+                          <Field label="Network" dark>
+                            <select value={cardDraft.network} onChange={(e) => setCardDraft({ ...cardDraft, network: e.target.value as CardAcct["network"] })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
+                              <option className="text-black" value="visa">Visa</option><option className="text-black" value="mastercard">Mastercard</option><option className="text-black" value="other">Other</option>
+                            </select>
+                          </Field>
+                          <Field label="Currency" dark>
+                            <select value={cardDraft.currency} onChange={(e) => setCardDraft({ ...cardDraft, currency: e.target.value as Currency })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
+                              <option className="text-black">AED</option><option className="text-black">LKR</option><option className="text-black">USD</option>
+                            </select>
+                          </Field>
                         </div>
                         <div className="grid grid-cols-2 gap-1.5">
-                          <input type="number" value={cardDraft.creditLimit} onChange={(e) => setCardDraft({ ...cardDraft, creditLimit: Number(e.target.value) })} placeholder="Credit limit" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} placeholder="Limit used" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <input type="number" value={cardDraft.outstanding} onChange={(e) => setCardDraft({ ...cardDraft, outstanding: Number(e.target.value) })} placeholder="Outstanding" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} placeholder="APR %" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} placeholder="EMI months" className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
-                          <OwnerSelect value={cardDraft.ownerId} onChange={(v) => setCardDraft({ ...cardDraft, ownerId: v })} />
+                          <Field label="Credit limit" dark><input type="number" value={cardDraft.creditLimit} onChange={(e) => setCardDraft({ ...cardDraft, creditLimit: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="Limit used" dark><input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="Outstanding" dark><input type="number" value={cardDraft.outstanding} onChange={(e) => setCardDraft({ ...cardDraft, outstanding: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="APR %" dark><input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="EMI months (0=none)" dark><input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="Owner" dark><OwnerSelect value={cardDraft.ownerId} onChange={(v) => setCardDraft({ ...cardDraft, ownerId: v })} /></Field>
                         </div>
                         <div className="flex gap-2 pt-1">
                           <button type="button" onClick={saveCard} className="flex items-center gap-1 rounded-lg bg-white/20 px-2 py-1"><Check size={12} /> Save</button>
@@ -602,19 +622,23 @@ export default function FinancePage() {
             {fLoans.map((l) => {
               if (editingLoanId === l.id && loanDraft) {
                 return (
-                  <div key={l.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
-                    <OwnerSelect value={loanDraft.ownerId} onChange={(v) => setLoanDraft({ ...loanDraft, ownerId: v })} />
-                    <input value={loanDraft.name} onChange={(e) => setLoanDraft({ ...loanDraft, name: e.target.value })} className={inputCls} />
-                    <select value={loanDraft.lenderType} onChange={(e) => setLoanDraft({ ...loanDraft, lenderType: e.target.value as Loan["lenderType"] })} className={selectCls}>
-                      <option value="bank">Bank</option><option value="person">Person</option><option value="institution">Institution</option>
-                    </select>
-                    <select value={loanDraft.currency} onChange={(e) => setLoanDraft({ ...loanDraft, currency: e.target.value as Currency })} className={selectCls}>
-                      <option>AED</option><option>LKR</option><option>USD</option>
-                    </select>
-                    <input type="number" value={loanDraft.principal} onChange={(e) => setLoanDraft({ ...loanDraft, principal: Number(e.target.value) })} placeholder="Principal" className={smallInputCls} />
-                    <input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} placeholder="APR %" className={smallInputCls} />
-                    <input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} placeholder="Tenure" className={smallInputCls} />
-                    <input type="date" value={loanDraft.startDate} onChange={(e) => setLoanDraft({ ...loanDraft, startDate: e.target.value })} className={selectCls} />
+                  <div key={l.id} className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
+                    <Field label="Owner"><OwnerSelect value={loanDraft.ownerId} onChange={(v) => setLoanDraft({ ...loanDraft, ownerId: v })} /></Field>
+                    <Field label="Name"><input value={loanDraft.name} onChange={(e) => setLoanDraft({ ...loanDraft, name: e.target.value })} className={inputCls} /></Field>
+                    <Field label="Lender type">
+                      <select value={loanDraft.lenderType} onChange={(e) => setLoanDraft({ ...loanDraft, lenderType: e.target.value as Loan["lenderType"] })} className={selectCls}>
+                        <option value="bank">Bank</option><option value="person">Person</option><option value="institution">Institution</option>
+                      </select>
+                    </Field>
+                    <Field label="Currency">
+                      <select value={loanDraft.currency} onChange={(e) => setLoanDraft({ ...loanDraft, currency: e.target.value as Currency })} className={selectCls}>
+                        <option>AED</option><option>LKR</option><option>USD</option>
+                      </select>
+                    </Field>
+                    <Field label="Principal"><input type="number" value={loanDraft.principal} onChange={(e) => setLoanDraft({ ...loanDraft, principal: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="APR %"><input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="Tenure (mo)"><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="Start date"><input type="date" value={loanDraft.startDate} onChange={(e) => setLoanDraft({ ...loanDraft, startDate: e.target.value })} className={selectCls} /></Field>
                     <button type="button" onClick={saveLoan} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingLoanId(null)} className={iconBtnCls}><X size={16} /></button>
                   </div>
@@ -679,13 +703,15 @@ export default function FinancePage() {
               return (
                 <div key={sc.id} className="rounded-xl border border-base-border p-3">
                   {editing && schemeDraft ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <OwnerSelect value={schemeDraft.ownerId} onChange={(v) => setSchemeDraft({ ...schemeDraft, ownerId: v })} />
-                      <input value={schemeDraft.name} onChange={(e) => setSchemeDraft({ ...schemeDraft, name: e.target.value })} placeholder="Scheme name" className={inputCls} />
-                      <input value={schemeDraft.institution} onChange={(e) => setSchemeDraft({ ...schemeDraft, institution: e.target.value })} placeholder="Institution" className={inputCls} />
-                      <select value={schemeDraft.currency} onChange={(e) => setSchemeDraft({ ...schemeDraft, currency: e.target.value as Currency })} className={selectCls}>
-                        <option>AED</option><option>LKR</option><option>USD</option>
-                      </select>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <Field label="Owner"><OwnerSelect value={schemeDraft.ownerId} onChange={(v) => setSchemeDraft({ ...schemeDraft, ownerId: v })} /></Field>
+                      <Field label="Scheme name"><input value={schemeDraft.name} onChange={(e) => setSchemeDraft({ ...schemeDraft, name: e.target.value })} className={inputCls} /></Field>
+                      <Field label="Institution"><input value={schemeDraft.institution} onChange={(e) => setSchemeDraft({ ...schemeDraft, institution: e.target.value })} className={inputCls} /></Field>
+                      <Field label="Currency">
+                        <select value={schemeDraft.currency} onChange={(e) => setSchemeDraft({ ...schemeDraft, currency: e.target.value as Currency })} className={selectCls}>
+                          <option>AED</option><option>LKR</option><option>USD</option>
+                        </select>
+                      </Field>
                       <button type="button" onClick={saveScheme} className="text-accent-green hover:text-white"><Check size={16} /></button>
                       <button type="button" onClick={() => setEditingSchemeId(null)} className={iconBtnCls}><X size={16} /></button>
                     </div>
@@ -767,22 +793,26 @@ export default function FinancePage() {
             {fSubs.map((s) => {
               if (editingSubId === s.id && subDraft) {
                 return (
-                  <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 p-2">
-                    <OwnerSelect value={subDraft.ownerId} onChange={(v) => setSubDraft({ ...subDraft, ownerId: v })} />
-                    <input value={subDraft.provider} onChange={(e) => setSubDraft({ ...subDraft, provider: e.target.value })} className={inputCls} />
-                    <input type="number" value={subDraft.amount} onChange={(e) => setSubDraft({ ...subDraft, amount: Number(e.target.value) })} className={smallInputCls} />
-                    <select value={subDraft.currency} onChange={(e) => setSubDraft({ ...subDraft, currency: e.target.value as Currency })} className={selectCls}>
-                      <option>AED</option><option>LKR</option><option>USD</option>
-                    </select>
-                    <select value={subDraft.cadence} onChange={(e) => setSubDraft({ ...subDraft, cadence: e.target.value as Sub["cadence"] })} className={selectCls}>
-                      <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
-                    </select>
+                  <div key={s.id} className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
+                    <Field label="Owner"><OwnerSelect value={subDraft.ownerId} onChange={(v) => setSubDraft({ ...subDraft, ownerId: v })} /></Field>
+                    <Field label="Provider"><input value={subDraft.provider} onChange={(e) => setSubDraft({ ...subDraft, provider: e.target.value })} className={inputCls} /></Field>
+                    <Field label="Amount"><input type="number" value={subDraft.amount} onChange={(e) => setSubDraft({ ...subDraft, amount: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="Currency">
+                      <select value={subDraft.currency} onChange={(e) => setSubDraft({ ...subDraft, currency: e.target.value as Currency })} className={selectCls}>
+                        <option>AED</option><option>LKR</option><option>USD</option>
+                      </select>
+                    </Field>
+                    <Field label="Cadence">
+                      <select value={subDraft.cadence} onChange={(e) => setSubDraft({ ...subDraft, cadence: e.target.value as Sub["cadence"] })} className={selectCls}>
+                        <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                      </select>
+                    </Field>
                     {subDraft.cadence === "monthly" ? (
-                      <input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} placeholder="Billing day" />
+                      <Field label="Billing day"><input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} /></Field>
                     ) : (
-                      <input type="date" value={subDraft.nextDate} onChange={(e) => setSubDraft({ ...subDraft, nextDate: e.target.value })} className={selectCls} />
+                      <Field label="Next date"><input type="date" value={subDraft.nextDate} onChange={(e) => setSubDraft({ ...subDraft, nextDate: e.target.value })} className={selectCls} /></Field>
                     )}
-                    <input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" placeholder="Tax %" />
+                    <Field label="Tax %"><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
                     <button type="button" onClick={saveSub} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingSubId(null)} className={iconBtnCls}><X size={16} /></button>
                   </div>
