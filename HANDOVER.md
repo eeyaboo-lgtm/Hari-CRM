@@ -15,13 +15,12 @@ documented workaround, see migration `seed_household_auth_users_v2`):
   5-attempts/15-min lockout (`check_login_allowed`).
 - `middleware.ts` real auth gate is back in (temp early-return removed).
 
-**STILL BLOCKING full login flow:** `.env.local`'s `SUPABASE_SERVICE_ROLE_KEY`
-is empty. `login/actions.ts` needs it (via `lib/supabase/admin.ts`) for the
-lockout check + attempt logging — login will error until it's set, both
-locally and as a Render env var. **Get this from Supabase dashboard → Project
-Settings → API → service_role key** (not available through any MCP tool —
-intentionally not exposed). Ask user for it next session, set via
-`update_environment_variables` (Render MCP) + `.env.local`.
+**LOGIN FULLY VERIFIED LIVE** (2026-08-15, continued further): user provided
+the service_role key, set on Render (`srv-d9vkoo3m8hqs739jj5d0`) +
+`.env.local`, pushed (`911a50c`), deployed (`dep-d9vorpk9v7es739voqsg`,
+live), and tested end-to-end in-browser — signed in as Shenaal at
+hari-crm.onrender.com, landed on the household profile picker. **Real auth
+is done, no more auth work needed.** Only the data-wiring (below) remains.
 
 **Schema gap found + fixed:** `schema.sql` never had tables for Cards, Card
 Spends, or Payment Schemes (those Finance features were built after the
@@ -59,27 +58,33 @@ Don't try to wire the PIN-picker into `auth.uid()` — that's a different,
 bigger redesign (each person would need their own real login session) and
 isn't what was asked for.
 
-**Next session, in order:**
-1. Get `SUPABASE_SERVICE_ROLE_KEY` from user, set on Render + `.env.local`,
-   verify login end-to-end in-browser.
-2. Build `lib/supabase/ownerMap.ts` (pattern above).
-3. Wire Finance page (`app/finance/page.tsx`, 866 lines) — highest value,
+**NEW SESSION — start here, in order:**
+1. Build `lib/supabase/ownerMap.ts` (pattern above — fetch `profiles`,
+   `localToDb(localId, currentUserId)` / `dbToLocal(row)`).
+2. Wire Finance page (`app/finance/page.tsx`, 866 lines) — highest value,
    most complex, proves the pattern. Replace each `useLocalStorage` with a
    Supabase fetch-on-mount + the existing setState calls also firing a
    Supabase insert/update/delete (keep it optimistic — don't add global
-   loading spinners that regress the UX just fixed last session).
-4. Health page (`app/health/page.tsx`, 450 lines) — schema already has
+   loading spinners that regress the UX just fixed last session). Tables:
+   `finance_accounts` (has new `account_kind` column), `finance_cards`,
+   `finance_card_spends`, `finance_loans`, `finance_subscriptions`,
+   `finance_payment_schemes`, `finance_payment_scheme_items` — all live.
+3. Health page (`app/health/page.tsx`, 450 lines) — schema already has
    clean 1:1 tables (`health_records`, `health_appointments`,
    `health_log_notes`), simpler than Finance, same owner-map pattern.
-5. Business page (`app/business/page.tsx`, 243 lines) — `business_projects`,
+4. Business page (`app/business/page.tsx`, 243 lines) — `business_projects`,
    `business_accounts`, `business_ideas` already exist and match.
-6. Vision board (`components/VisionBoard.tsx`, 271 lines) — `board_items`
+5. Vision board (`components/VisionBoard.tsx`, 271 lines) — `board_items`
    table + `board-images` storage bucket both exist; photos currently stored
    as data-URLs in localStorage (5-10MB cap) need to become real uploads to
    the bucket with signed URLs, which is more than a find-replace — budget
    more time for this one.
-7. Build-verify (isolated `/tmp` copy) → push (needs a fresh GitHub token
+6. Build-verify (isolated `/tmp` copy) → push (needs a fresh GitHub token
    pasted into chat, nothing persisted by design) → verify live in-browser.
+
+**Login credentials for testing:** Shenaal = hilaryuae@gmail.com, Shalini =
+shalunayanthara@gmail.com. The shared 6-digit passcode is intentionally not
+written anywhere in this repo — ask the user if you need it, never commit it.
 
 ## SUPABASE SCHEMA IS NOW LIVE (fixed 2026-08-15)
 Project `pfchzkcteymiigsdokeo`. All 17 Hari-CRM tables created via
