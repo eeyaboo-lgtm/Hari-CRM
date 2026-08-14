@@ -7,9 +7,11 @@ import {
   Briefcase,
   Sparkles,
   Settings,
+  LogOut,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "@/app/login/actions";
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutGrid, href: "/dashboard" },
@@ -58,11 +60,23 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="glass-card rounded-xl2 p-4">
-        <p className="relative z-10 text-sm font-medium text-gray-100">Status check</p>
-        <p className="relative z-10 mt-1 text-xs text-gray-400">
-          ShelfPulse & RetailSuite health is one card away — see Business Projects.
-        </p>
+      <div className="space-y-3">
+        <div className="glass-card rounded-xl2 p-4">
+          <p className="relative z-10 text-sm font-medium text-gray-100">Status check</p>
+          <p className="relative z-10 mt-1 text-xs text-gray-400">
+            ShelfPulse & RetailSuite health is one card away — see Business Projects.
+          </p>
+        </div>
+
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-red-300"
+          >
+            <LogOut size={18} />
+            Log out
+          </button>
+        </form>
       </div>
     </aside>
   );
