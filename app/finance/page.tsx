@@ -78,11 +78,18 @@ export default function FinancePage() {
   const owners = useMemo(() => [...members, SHARED], [members]);
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
 
-  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts", DEFAULT_ACCOUNTS);
-  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards", DEFAULT_CARDS);
-  const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends", []);
-  const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans", DEFAULT_LOANS);
-  const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs", DEFAULT_SUBS);
+  // .v2 keys: the pre-rebuild Finance page persisted "finance.accounts" /
+  // "finance.loans" / "finance.subs" under these exact names with a
+  // different, incompatible shape (e.g. loans had no principal/rate/tenure).
+  // Reusing the old keys would hydrate the new EMI math with undefined
+  // fields and silently render "NaN" — bumping the key avoids that
+  // collision. Old data is simply orphaned, not migrated (it was placeholder
+  // data anyway).
+  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v2", DEFAULT_ACCOUNTS);
+  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v2", DEFAULT_CARDS);
+  const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends.v2", []);
+  const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans.v2", DEFAULT_LOANS);
+  const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs.v2", DEFAULT_SUBS);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
 
   const [filter, setFilter] = useState<string>("all");
