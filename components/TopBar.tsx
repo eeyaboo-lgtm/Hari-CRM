@@ -1,20 +1,22 @@
 "use client";
 
 import { Search, Bell } from "lucide-react";
-import { useState } from "react";
+import { useHousehold } from "@/lib/HouseholdContext";
 
-const PEOPLE = [
-  { key: "shenaal", name: "Shenaal", initial: "S" },
-  { key: "shalini", name: "Shalini", initial: "S" },
+const GRADIENTS = [
+  "from-accent-purple to-accent-blue",
+  "from-accent-pink to-accent-orange",
+  "from-accent-blue to-accent-green",
+  "from-accent-orange to-accent-pink",
 ];
 
 export default function TopBar() {
-  const [activePerson, setActivePerson] = useState(PEOPLE[0]);
+  const { members, activeMember, selectMember } = useHousehold();
 
   return (
     <div className="flex items-center justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Hello, {activePerson.name}</h1>
+        <h1 className="text-2xl font-semibold text-white">Hello, {activeMember?.name ?? "there"}</h1>
         <p className="text-sm text-gray-400">Welcome back!</p>
       </div>
 
@@ -32,17 +34,16 @@ export default function TopBar() {
           <Bell size={18} className="relative z-10" />
         </button>
 
-        {/* Household switcher — replaces the single-user avatar in the reference design.
-            Backed by auth once wired up; for now toggles which person's "private" data
-            is in view (shared/mirrored items always show regardless of who's active). */}
+        {/* Household switcher — real members from Settings. Selecting someone else
+            re-triggers ProfileGate (PIN pad) automatically if that member has a PIN set. */}
         <div className="glass-card flex items-center gap-1 rounded-full p-1">
-          {PEOPLE.map((person) => (
+          {members.map((person, i) => (
             <button
-              key={person.key}
-              onClick={() => setActivePerson(person)}
+              key={person.id}
+              onClick={() => selectMember(person.id)}
               className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors ${
-                activePerson.key === person.key
-                  ? "glossy-gradient bg-gradient-to-br from-accent-purple to-accent-pink text-white shadow-glow-purple"
+                activeMember?.id === person.id
+                  ? `glossy-gradient bg-gradient-to-br text-white shadow-glow-purple ${GRADIENTS[i % GRADIENTS.length]}`
                   : "text-gray-400 hover:text-gray-200"
               }`}
               title={person.name}

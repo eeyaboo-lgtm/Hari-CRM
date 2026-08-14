@@ -3,12 +3,13 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
-import { Plus, X } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Plus, X } from "lucide-react";
 
 const PROJECTS = [
   { name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", type: "SaaS product" },
   { name: "RetailSuite", url: "https://retailsuite.onrender.com/", type: "SaaS product" },
-  { name: "Dino History World", url: "https://dinohistory.onrender.com/", type: "Content site" },
+  { name: "UnwindCircle", url: "https://unwindcircle.com/", type: "Content site" },
+  { name: "Dino History", url: "https://dinohistory.com/", type: "Content site" },
 ];
 
 type Idea = { id: string; text: string; status: "new" | "exploring" | "shipped" };
@@ -20,13 +21,102 @@ const STATUS_STYLE: Record<Idea["status"], string> = {
   shipped: "bg-accent-green/20 text-accent-green",
 };
 
+type StackItem = {
+  id: string;
+  service: string;
+  url: string;
+  email: string;
+  username: string;
+};
+
+const STACK_PRESETS: { service: string; url: string }[] = [
+  { service: "Render", url: "https://dashboard.render.com/" },
+  { service: "GitHub", url: "https://github.com/" },
+  { service: "Supabase", url: "https://supabase.com/dashboard" },
+  { service: "Cloudflare", url: "https://dash.cloudflare.com/" },
+  { service: "Spaceship.com", url: "https://www.spaceship.com/application/" },
+];
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// Masks the tail of a sensitive-ish string (email/username) so it's
+// recognizable at a glance but not fully exposed on screen.
+function maskTail(value: string) {
+  if (!value) return "";
+  if (value.length <= 3) return value[0] + "***";
+  const visible = Math.max(value.length - 4, 3);
+  return value.slice(0, visible) + "***";
+}
+
+function StackRow({ item, onUpdate, onRemove }: { item: StackItem; onUpdate: (v: StackItem) => void; onRemove: () => void }) {
+  const [reveal, setReveal] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div className="rounded-xl bg-base-card/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <a
+          href={item.url || "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-w-0 items-center gap-2 text-sm font-medium text-white hover:text-accent-blue"
+        >
+          <span className="truncate">{item.service}</span>
+          <ExternalLink size={12} className="shrink-0 text-gray-500" />
+        </a>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setReveal((r) => !r)} className="text-gray-500 hover:text-white" title="Toggle reveal">
+            {reveal ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+          <button type="button" onClick={() => setEditing((e) => !e)} className="text-xs text-gray-400 hover:text-white">
+            {editing ? "Done" : "Edit"}
+          </button>
+          <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400">
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      {!editing ? (
+        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+          {item.email && <span>Email: {reveal ? item.email : maskTail(item.email)}</span>}
+          {item.username && <span>User: {reveal ? item.username : maskTail(item.username)}</span>}
+        </div>
+      ) : (
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <input
+            value={item.url}
+            onChange={(e) => onUpdate({ ...item, url: e.target.value })}
+            placeholder="Custom URL (e.g. specific repo)"
+            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+          />
+          <input
+            value={item.email}
+            onChange={(e) => onUpdate({ ...item, email: e.target.value })}
+            placeholder="Email used"
+            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+          />
+          <input
+            value={item.username}
+            onChange={(e) => onUpdate({ ...item, username: e.target.value })}
+            placeholder="Username"
+            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BusinessPage() {
   const [ideas, setIdeas] = useLocalStorage<Idea[]>("business.ideas", []);
-  const [text, setText] = useState("");
+  // Draft persists to localStorage on every keystroke so nothing typed is
+  // ever lost, even if the tab closes before "Add" is clicked.
+  const [text, setText] = useLocalStorage<string>("business.ideaDraft", "");
+  const [stack, setStack] = useLocalStorage<StackItem[]>("business.stack", []);
+  const [presetPick, setPresetPick] = useState(STACK_PRESETS[0].service);
 
   const addIdea = () => {
     if (!text.trim()) return;
@@ -42,6 +132,16 @@ export default function BusinessPage() {
   };
   const removeIdea = (id: string) => setIdeas((prev) => prev.filter((i) => i.id !== id));
 
+  const addStackItem = () => {
+    const preset = STACK_PRESETS.find((p) => p.service === presetPick);
+    setStack((prev) => [
+      ...prev,
+      { id: uid(), service: preset?.service ?? presetPick, url: preset?.url ?? "", email: "", username: "" },
+    ]);
+  };
+  const updateStackItem = (id: string, v: StackItem) => setStack((prev) => prev.map((s) => (s.id === id ? v : s)));
+  const removeStackItem = (id: string) => setStack((prev) => prev.filter((s) => s.id !== id));
+
   return (
     <div className="flex min-h-screen bg-base-bg">
       <Sidebar />
@@ -49,11 +149,11 @@ export default function BusinessPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Business Projects</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Sites, stores, socials, and the idea journal — backed by business_projects, business_accounts,
-            business_ideas in schema.sql.
+            Sites, stores, socials, program stack, and the idea journal — backed by business_projects,
+            business_accounts, business_ideas in schema.sql.
           </p>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           {PROJECTS.map((p) => (
             <a
               key={p.name}
@@ -76,7 +176,7 @@ export default function BusinessPage() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addIdea()}
-              placeholder="Capture a new idea..."
+              placeholder="Capture a new idea... (saves as you type)"
               className="min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
             />
             <button type="button" onClick={addIdea} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
@@ -104,6 +204,37 @@ export default function BusinessPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="glass-card rounded-xl2 p-5">
+          <h2 className="relative z-10 mb-1 font-medium text-white">Program stack</h2>
+          <p className="relative z-10 mb-4 text-sm text-gray-400">
+            Every tool/service used to build and run these projects, with a clickable shortcut, an optional custom
+            URL (e.g. a specific repo), and the account used — email/username shown masked until revealed.
+          </p>
+          <div className="relative z-10 mb-4 space-y-2">
+            {stack.length === 0 && <p className="text-xs text-gray-500">No stack entries yet — add one below.</p>}
+            {stack.map((s) => (
+              <StackRow key={s.id} item={s} onUpdate={(v) => updateStackItem(s.id, v)} onRemove={() => removeStackItem(s.id)} />
+            ))}
+          </div>
+          <div className="relative z-10 flex gap-2">
+            <select
+              value={presetPick}
+              onChange={(e) => setPresetPick(e.target.value)}
+              className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {STACK_PRESETS.map((p) => (
+                <option key={p.service} value={p.service}>
+                  {p.service}
+                </option>
+              ))}
+              <option value="Other">Other</option>
+            </select>
+            <button type="button" onClick={addStackItem} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
+              <Plus size={14} /> Add to stack
+            </button>
           </div>
         </section>
       </main>
