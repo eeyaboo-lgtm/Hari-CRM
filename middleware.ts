@@ -12,6 +12,13 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // is unreachable until this early return is removed. REMOVE THIS BLOCK when
 // sorting out login (see PROJECT-STATUS.md).
 export async function middleware(request: NextRequest) {
+  // app/page.tsx's server-side redirect() to /dashboard throws in this build —
+  // handling the root redirect here instead, which is more reliable anyway.
+  if (request.nextUrl.pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
   return NextResponse.next();
 }
 
