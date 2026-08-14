@@ -8,8 +8,13 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     // Tighten this once the final Supabase project URL is known — replace *.supabase.co
     // with the exact project host.
+    // TEMP: 'unsafe-inline' on script-src unblocks Next.js App Router's required
+    // inline hydration/RSC bootstrap scripts (without it the page renders SSR-only
+    // and never hydrates — blank screen, no console error). Tighten to a
+    // per-request nonce (middleware sets x-nonce, layout reads it via headers())
+    // once real auth is wired in — see PROJECT-STATUS.md.
     value:
-      "default-src 'self'; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none';",
+      "default-src 'self'; img-src 'self' data: https://*.supabase.co; connect-src 'self' https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none';",
   },
 ];
 
