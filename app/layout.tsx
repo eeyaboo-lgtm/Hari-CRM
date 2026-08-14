@@ -6,9 +6,23 @@ export const metadata: Metadata = {
   description: "Shenaal & Shalini's shared life dashboard.",
 };
 
+// Applied before paint so switching to light mode on a previous visit
+// doesn't flash dark on reload.
+const THEME_INIT_SCRIPT = `
+(function () {
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="bg-base-bg text-gray-200 antialiased">{children}</body>
     </html>
   );
