@@ -19,33 +19,35 @@ export default function TopBar() {
       </div>
 
       <div className="hidden flex-1 justify-center md:flex">
-        <div className="flex w-full max-w-sm items-center gap-2 rounded-full bg-base-card px-4 py-2.5 text-sm text-gray-400">
-          <Search size={16} />
-          <span>Search</span>
+        <div className="glass-card flex w-full max-w-sm items-center gap-2 rounded-full px-4 py-2.5 text-sm text-gray-400">
+          <span className="relative z-10 flex items-center gap-2">
+            <Search size={16} />
+            <span>Search</span>
+          </span>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="rounded-full bg-base-card p-2.5 text-gray-300 hover:text-white">
-          <Bell size={18} />
+        <button className="glass-card rounded-full p-2.5 text-gray-300 hover:text-white">
+          <Bell size={18} className="relative z-10" />
         </button>
 
         {/* Household switcher — replaces the single-user avatar in the reference design.
             Backed by auth once wired up; for now toggles which person's "private" data
             is in view (shared/mirrored items always show regardless of who's active). */}
-        <div className="flex items-center gap-1 rounded-full bg-base-card p-1">
+        <div className="glass-card flex items-center gap-1 rounded-full p-1">
           {PEOPLE.map((person) => (
             <button
               key={person.key}
               onClick={() => setActivePerson(person)}
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+              className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                 activePerson.key === person.key
-                  ? "bg-gradient-to-br from-accent-purple to-accent-pink text-white"
+                  ? "glossy-gradient bg-gradient-to-br from-accent-purple to-accent-pink text-white shadow-glow-purple"
                   : "text-gray-400 hover:text-gray-200"
               }`}
               title={person.name}
             >
-              {person.initial}
+              <span className="relative z-10">{person.initial}</span>
             </button>
           ))}
         </div>

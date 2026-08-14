@@ -3,6 +3,44 @@
 @tailwind utilities;
 
 html, body {
-  background-color: #15161c;
+  min-height: 100%;
+  background: radial-gradient(circle at 18% -10%, #2c2f52 0%, #191a2b 42%, #0b0c13 100%);
+  background-attachment: fixed;
   color: #e5e7eb;
+}
+
+@layer components {
+  /* Frosted glass panel — used for dark cards */
+  .glass-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  /* Glossy sheen for saturated gradient cards (quick launch, active nav, hero) */
+  .glossy-gradient {
+    position: relative;
+    overflow: hidden;
+  }
+  .glossy-gradient::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 45%);
+    pointer-events: none;
+  }
+  .glossy-gradient::after {
+    content: "";
+    position: absolute;
+    top: -60%;
+    right: -25%;
+    width: 65%;
+    height: 130%;
+    background: radial-gradient(circle, rgba(255,255,255,0.22), rgba(255,255,255,0) 70%);
+    pointer-events: none;
+  }
 }
