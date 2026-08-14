@@ -198,3 +198,41 @@ the whole project (excluding `.git`/`node_modules`/`.next`) into a fresh
 dir, checkout the remote branch cleanly, rsync the edited files back in,
 commit, push from `/tmp`. Don't try to repair the workspace's `.git` in
 place — it's a waste of time.
+
+## 2026-08-14 (final for this session) — fixed dead nav, fleshed out every page
+
+Two more fixes in this session, both pushed and confirmed live:
+
+1. **Dead clicks fixed** (commit `ac1aba6`) — Sidebar nav, dashboard module
+   tiles, and quick-launch cards were never actually wired to navigate
+   anywhere (local-state-only or plain unlinked `<div>`s). Now real
+   `next/link`/`<a>` navigation everywhere.
+2. **All pages fleshed out** (commit `0541669`) — Health/Finance/Business
+   now have real add/delete forms, persisted to `localStorage` via the new
+   `lib/useLocalStorage.ts` hook (no Supabase yet, but functional and
+   survives reloads). Business project cards fixed the same dead-link bug.
+   Settings got Appearance (day/night toggle, `data-theme` attribute +
+   light-mode CSS overrides), household profile name editing, and
+   notification preference toggles. Vision board is now a full editor —
+   `components/VisionBoard.tsx`: add photos from local files, add sticky
+   notes, drag to move (grip handle), resize (corner handle), delete,
+   click-to-select/bring-to-front, clear board. No new npm dependencies —
+   all done with native pointer events.
+
+Every push was test-built (`npm run build`, 0 errors) in a `/tmp` clone
+before going to GitHub, so nothing untested hit the live site.
+
+**Still open / next session:**
+- Vision board photos are `localStorage` data URLs — fine for now, will hit
+  the ~5-10MB browser cap eventually. Needs the `board-images` Supabase
+  bucket for real storage + cross-device sync.
+- All the "saved on this device" data (health/finance/business/vision) is
+  per-browser only — doesn't sync between Shenaal's and Shalini's devices
+  yet. That needs the Supabase schema migration unblocked (see the
+  standing blocker above) and each page's `useLocalStorage` calls swapped
+  for real Supabase queries.
+- `next@14.2.15` has a known security advisory — worth a version bump,
+  low urgency for a private household app.
+- Charts on the dashboard (spending trend line, category donut) were
+  flagged earlier as rendering blank in a screenshot — not yet
+  investigated, likely just placeholder-data/timing, not a real bug.
