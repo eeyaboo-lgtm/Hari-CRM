@@ -1,108 +1,111 @@
-# Hari-CRM — Session Handover (2026-08-14, mega feature-request session)
+# Hari-CRM — Session Handover (2026-08-15)
 
-## Status: code written, NOT YET built/pushed/deployed
-Session hit usage limit mid-build-verify. Code below is written to the local
-workspace files but has **not** been through `npm run build` and has **not**
-been pushed to GitHub or deployed. Next session: verify build, then push.
+## Status: PUSHED & LIVE (auto-deploy) — commit `1824aa5`
 
-## What was actually built this session
-User gave a 6-part mega feature request (household/PIN splitting, Health
-restructure, Finance rebuild, Business additions, Vision trips/experiences,
-Memberships module). Given the scope, built in priority order:
+Two fixes + one feature shipped this round, all build-verified and confirmed
+live via browser check before moving on:
 
-1. **Household/Profile/PIN infrastructure (DONE)** — foundational, shared by
-   Health/Finance/Vision:
-   - `lib/HouseholdContext.tsx` (new) — React context, `HouseholdProvider` +
-     `useHousehold()` hook. Members list in localStorage (`household.members`),
-     active profile + unlock state in sessionStorage (re-pick each browser
-     session, Netflix-style). PINs are SHA-256 hashed via SubtleCrypto, never
-     stored plain. Functions: selectMember, attemptUnlock, lock, addMember,
-     removeMember, renameMember, setPin, changePin, removePin.
-   - `components/ProfileGate.tsx` (new) — full-screen profile picker + 6-digit
-     PIN pad, wraps the whole app via `app/layout.tsx`. Skips itself on
-     `/login`. Renders nothing until a profile is picked and unlocked.
-   - `app/layout.tsx` edited — wraps `{children}` in `<HouseholdProvider><ProfileGate>`.
-   - `components/TopBar.tsx` rewritten — real members from context instead of
-     hardcoded PEOPLE array; clicking another avatar re-triggers the PIN gate
-     if that member has one set.
-   - `app/settings/page.tsx` edited — "Household profiles" section now has
-     real add/remove member, rename, and a `PinManager` sub-component per
-     member (set/change/remove 6-digit PIN, requires current PIN to change/remove).
+1. **Blank-screen bug fixed** (`6278b41`) — the 2026-08-14 CSP hardening set
+   `script-src 'self'` with no `unsafe-inline`, which silently blocked
+   Next.js App Router's inline hydration scripts. Page rendered its SSR
+   shell (ProfileGate's `!ready` placeholder) and React never attached — no
+   console error, all chunks 200, looked like a working deploy. Diagnostic
+   method saved in memory as `feedback_csp_blank_screen` (check for a
+   `__reactFiber$*` key on the root DOM node — absent means hydration never
+   ran, go straight to CSP). Fix: `'unsafe-inline'` added back to
+   `script-src`. TODO: swap to per-request nonce once real auth exists.
+2. **Finance page rebuilt** (`d33a8d5`, part 3 of the original 6-part
+   request) — see below.
+3. **NaN bug fixed** (`1824aa5`) — the rebuild reused the old Finance page's
+   localStorage keys (`finance.accounts`/`loans`/`subs`), which had a
+   different shape (old loans had no principal/rate/tenure). Any browser
+   that had visited the old page hydrated the new EMI math with `undefined`
+   fields → "committed outflow: NaN". Fixed by bumping keys to `.v2`.
 
-2. **Health page restructure (DONE)** — `app/health/page.tsx` fully rewritten:
-   - **Conditions & history** — member dropdown selector + text + optional date.
-   - **Appointment history** — member dropdown selector + text + provider +
-     date, sorted by date.
-   - **Insurance details** — separate section, multiple policies supported.
-     Each policy card: household member, provider, key policyholder (free
-     text, e.g. "under spouse's plan"), expiry date, renewal date, co-payments/
-     allowances/coverage notes (free text), and 4 file upload slots (card
-     front, card back, coverage network file, benefits table) — each stored
-     as a data URL (`FileReader.readAsDataURL`, same pattern as
-     `VisionBoard.tsx`'s photos), with "open in new tab" and "download" links
-     once uploaded, plus a remove button. Noted in-page: large files should
-     wait for the `health-documents` Supabase bucket (already planned in
-     schema.sql, not yet wired) — data-URL approach has the same ~5-10MB
-     browser cap already flagged for vision board photos.
+## Finance rebuild — what shipped (commit `d33a8d5`, patched by `1824aa5`)
+- `lib/financeUtils.ts`: reducing-balance EMI formula, amortized
+  remaining-balance calc, monthly-date helpers, red/orange/green/blue
+  budget-status algorithm (ratio of monthly outflow to a household budget).
+- Per-user split: filter tabs (Household/Shenaal/Shalini/Shared) across
+  every section; every account/card/loan/subscription tagged with an owner.
+- Click-to-blur/unblur on sensitive balances (salary accounts) — session-only
+  reveal state, resets on reload.
+- New **Cards** section: Visa/Mastercard tiles (last-4 digits only),
+  expandable detail (credit limit/used/outstanding/APR), auto-calculated EMI
+  when the card has a payment plan, per-card ad-hoc spend log that updates
+  limit-used/outstanding live.
+- **Loans**: lender type (bank/person/institution), EMI and remaining
+  balance now computed from principal/rate/tenure/start-date instead of
+  manually-entered numbers.
+- **Subscriptions**: monthly (billing day) or yearly (fixed date) cadence,
+  tax %, computed monthly-equivalent cost.
+- **Upcoming payments** widget (next 14 days, merges subs + loan due dates)
+  and a **next major payment** widget (yearly bills landing 2–4 months out)
+  — both on the Finance page itself (not yet mirrored to the dashboard).
+- Household-wide monthly budget input drives the status pill.
+- Verified live in-browser post-deploy: real EMI numbers computing
+  correctly (e.g. 42,000 AED @ 4.5% / 36mo → 1,249 AED/mo), upcoming/next-major
+  widgets correct, zero console errors.
 
-3. **Business page quick wins (DONE)** — `app/business/page.tsx` rewritten:
-   - Fixed project cards: **UnwindCircle** (https://unwindcircle.com/) and
-     **Dino History** (https://dinohistory.com/, was previously pointing at a
-     wrong `dinohistory.onrender.com` placeholder) added/corrected alongside
-     ShelfPulse/RetailSuite.
-   - **Idea journal "not saving" bug** — root cause wasn't conclusively found
-     (the original `useLocalStorage` hook looked correct on inspection), but
-     hardened defensively: the idea-input textbox itself is now
-     localStorage-backed (`business.ideaDraft`) so every keystroke persists
-     immediately, not just on "Add" — nothing typed can be lost even if the
-     tab closes first. Worth watching next session whether the user still
-     sees ideas vanish after this.
-   - **New: Program stack section** — add entries for Render/GitHub/Supabase/
-     Cloudflare/Spaceship.com (preset dropdown) or "Other", each with a
-     clickable shortcut link (editable to a custom URL, e.g. a specific
-     repo), and email/username fields masked with a `***` tail
-     (`maskTail()` helper) until toggled to reveal.
+## NOT done in the Finance rebuild (acceptable scope cuts, revisit if asked)
+- No dedicated card-detail page — detail is an inline `<details>` expander,
+  not a separate route.
+- Dashboard's "upcoming payments" placeholder widget not yet wired to real
+  Finance data — still hardcoded (`app/dashboard/page.tsx`). That's task #7
+  in PROJECT-STATUS.md (wire Supabase/real data into every page), not
+  specific to this rebuild.
+- University payment-timeline cycle tracker (mentioned in the original spec
+  for loans) not built — current loan model handles bank/person/institution
+  EMI loans well but has no special "cycle" UI for tuition-style schedules.
 
-## What's NOT done yet (next session, in priority order)
-1. **Verify the build** — run `npm run build` in a clean `/tmp` clone (the
-   workspace `.git` corruption issue is recurring again, see below), fix any
-   type errors, THEN push to GitHub. Nothing above has been deployed.
-2. **Finance page rebuild** (biggest remaining piece) — per-user split with
-   combined household view; blur/unblur salary (click to reveal, click again
-   to reblur); banks + cards (Visa/Mastercard tiles, last-4-digits only,
-   account type incl. BNPL); card detail view with installment plans
-   (interest rate, credit limit, limit used, tenure, outstanding, auto-
-   calculated monthly EMI); loans (banks/people/institutions, university
-   payment timelines showing cycle position); subscriptions (currency,
-   provider, repayment date, tenure, tax) feeding a dashboard "upcoming
-   payments within 2 weeks" widget and a Finance-page "this month + next
-   major non-monthly payment in 2-4 months" view; per-card spending entries
-   (description/date/amount/currency); and the budget-status color algorithm
-   (red/orange/green/blue) feeding the dashboard.
-3. **Vision board additions** — trips/bucket-list/experiences with type and
-   ticket price/links; trip detail page (one-way/round-trip/per-person costs,
-   notes, shortcuts to MakeMyTrip/Expedia/Booking.com/Trivago/Agoda/
-   TripAdvisor/Airbnb + 4 more); experience shortcuts by region (UAE:
-   Platinumlist/Cobone/Groupon/Fever; equivalents for US and Sri Lanka —
-   needs a quick web search next session for the right regional sites).
-4. **Memberships module** — new dashboard bottom-button + page, distinct from
-   Subscriptions (renewal/expiry/fees/payment dates, can include loyalty
-   cards).
-5. Update `schema.sql` to add tables matching all of the above once the
-   Supabase migration blocker (see PROJECT-STATUS.md — project needed
-   renaming away from "RetailSuite Project") is resolved, so this doesn't
-   stay localStorage-only forever.
+## Shipped this round (parts 1, 2, and part of 4 of the original 6-part request)
+1. **Household/Profile/PIN system** — `lib/HouseholdContext.tsx` +
+   `components/ProfileGate.tsx`, wired into `app/layout.tsx`, `TopBar.tsx`,
+   `app/settings/page.tsx`. Netflix-style profile picker gates the whole app;
+   optional 6-digit PIN per member (SHA-256 hashed, never plain). Settings →
+   Household profiles: add/remove/rename members, set/change/remove PIN.
+2. **Health page restructured** (`app/health/page.tsx`) — three sections:
+   Conditions & history, Appointment history (member dropdown selector),
+   Insurance details (provider, key policyholder, expiry/renewal dates,
+   co-pays/allowances/coverage notes, 4 file upload slots — card front/back,
+   network file, benefits table — each openable in a new tab or downloadable).
+   Files are data-URLs client-side (same localStorage cap as vision board
+   photos) until the `health-documents` Supabase bucket is wired up.
+4. **Business page partial** (`app/business/page.tsx`) — fixed UnwindCircle
+   (unwindcircle.com) + Dino History (dinohistory.com) project links,
+   idea-journal input now saves every keystroke as a draft (was possibly
+   losing typed-but-not-submitted text), new Program stack section
+   (Render/GitHub/Supabase/Cloudflare/Spaceship.com presets + custom, masked
+   email/username, clickable links).
 
-## Recurring environment issue (again this session)
-Workspace folder's `.git` broke again (`rm: cannot remove ... Operation not
-permitted` even on `/tmp` paths this time — broader FS hiccup, not just
-`.git`). Standard workaround from prior sessions: rsync the project
-(excluding `.git`/`node_modules`/`.next`) into a fresh `/tmp` dir, `git init`
-+ remote there, build/test, then push from `/tmp`. If `/tmp` itself is
-locked, try a differently-named temp dir or retry after a moment — this has
-been transient before.
+## NOT done yet — next session, in this order
+3. ~~Finance page rebuild~~ — **DONE**, see above (`d33a8d5`/`1824aa5`).
+   Remaining scope cuts: university cycle tracker, dashboard widget wiring
+   (folded into #7 below).
+5. **Vision board additions** (not started) — trips/bucket-list/experiences
+   w/ type + ticket price/links; trip detail page (one-way/round-trip/
+   per-person costs, notes, shortcuts to MakeMyTrip/Expedia/Booking.com/
+   Trivago/Agoda/TripAdvisor/Airbnb + 4 more); experience shortcuts by region
+   (UAE: Platinumlist/Cobone/Groupon/Fever; need a quick web search next
+   session for the right US and Sri Lanka equivalents).
+6. **Memberships module** (not started) — new dashboard bottom-button + page,
+   distinct from Subscriptions (renewal/expiry/fees/payment dates, can
+   include loyalty cards).
+7. Extend `schema.sql` to match all of the above once the Supabase migration
+   blocker is resolved (see PROJECT-STATUS.md) — everything above is still
+   localStorage-only, per-browser, not synced across devices.
 
-## Reminder
-Per project instructions: this session is past the message threshold — start
-a **new Cowork session** in this same project. Everything needed to continue
-is in this file plus memory (`project_hari_crm.md`).
+## Notes for next session
+- GitHub push needs a fresh token pasted into chat each session (or the
+  GitHub connector authorized once in claude.ai connector settings for
+  persistent access) — nothing is stored between sessions by design.
+- Environment quirk this session: `/tmp/hari-crm-work` (the usual scratch dir
+  name from past sessions) was stuck with a permission error unrelated to
+  git. Workaround: use a fresh uniquely-named `/tmp` dir each time
+  (`/tmp/hari-crm-work-$(date +%s)`) rather than reusing a fixed name.
+- Working git workflow confirmed again: (1) rsync workspace → scratch dir A,
+  `npm install && npm run build` there to verify; (2) separately, fresh clean
+  dir B, `git init` + remote + fetch + `checkout -b main origin/main`; (3)
+  rsync scratch dir A's *edited* files on top of clean dir B (this avoids the
+  "untracked files would be overwritten" checkout error); (4) commit + push
+  from dir B.
