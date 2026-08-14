@@ -165,22 +165,36 @@ deleted, at `legacy-flask/`.**
   User has decided not to revoke it (says it's only in use for a month on
   Claude) — noted, not re-raising per their instruction.
 
-## 2026-08-14 (later still) — UI polish: glassmorphism + richer palette
+## 2026-08-14 (later still) — UI polish + fixed dead nav/links
 
-**Why:** Live dashboard didn't match the reference screenshot's glossy,
-glassmorphic look — flat solid cards, no blur/sheen, muted colors.
+**UI polish:** Added `.glass-card` (translucent, backdrop-blur, soft border +
+inset highlight) and `.glossy-gradient` (diagonal light sheen + radial
+highlight) utility classes in `app/globals.css`. Body background is now a
+radial gradient (was flat near-black). Accent palette in `tailwind.config.ts`
+brightened/more saturated, plus new `shadow-glow-*` utilities. Applied across
+Sidebar, TopBar, and the dashboard page. Pushed as commit `6dc5377`.
 
-**What changed:** Added `.glass-card` (translucent, backdrop-blur, soft
-border + inset highlight) and `.glossy-gradient` (diagonal light sheen +
-radial highlight) utility classes in `app/globals.css`. Body background is
-now a radial gradient (was flat near-black). Accent palette in
-`tailwind.config.ts` brightened/more saturated. Applied across Sidebar (nav
-pill, status card), TopBar (search bar, avatar switcher), and the dashboard
-page (hero card, recent updates, quick-launch cards, module tiles, chart
-panels) with new `shadow-glow-*` utilities for colored glow shadows.
+**Fixed dead clicks (commit after `6dc5377`):** user reported "nothing
+happens when I click anything." Root cause — none of the nav/shortcut
+elements actually navigated:
+- Sidebar nav items only called `setActive()` (local highlight state), never
+  routed anywhere. Fixed: now `next/link` `<Link>`s to `/dashboard`,
+  `/health`, `/finance`, `/business`, `/vision`, `/settings`, active state
+  driven by `usePathname()`.
+- Dashboard module shortcut tiles (Health/Finance/Business/Vision Board) were
+  plain `<button>`s with no handler at all. Fixed: now `<Link>`s to their
+  routes.
+- Quick-launch cards (ShelfPulse/RetailSuite) were plain `<div>`s. Fixed: now
+  `<a target="_blank">` opening the live app URLs.
+- TopBar's household switcher and "Quick add" hero button were left as-is —
+  switcher already worked (local state, changes greeting), "Quick add" has
+  no defined target feature yet (placeholder, not a bug).
 
-**Local git note:** the synced workspace folder's `.git` was broken again
-(same Windows/mount permission issue as before — individual files inside
-`.git` can't be removed, `Operation not permitted`). Pushed from a clean
-`/tmp` clone as before, workspace folder's own `.git` is still stale/unusable
-for direct git commands — always work from a `/tmp` clone when pushing.
+**Local git note (recurring):** workspace folder's `.git` breaks again almost
+every session (Windows/mount permission issue — can't even `rm` individual
+files inside `.git`, "Operation not permitted"). Workflow that works: rsync
+the whole project (excluding `.git`/`node_modules`/`.next`) into a fresh
+`/tmp/hari-crm-work`, `git init` + remote there, fetch, clear the working
+dir, checkout the remote branch cleanly, rsync the edited files back in,
+commit, push from `/tmp`. Don't try to repair the workspace's `.git` in
+place — it's a waste of time.

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import SnapshotChart from "@/components/charts/SnapshotChart";
@@ -77,29 +78,37 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-4">
-                <div className="glossy-gradient rounded-xl2 bg-gradient-to-br from-pink-500 to-rose-400 p-5 shadow-glow-pink">
-                  <p className="relative z-10 text-xs uppercase tracking-wide text-white/80">Quick launch</p>
-                  <p className="relative z-10 mt-2 text-lg font-semibold text-white">ShelfPulse</p>
-                  <p className="relative z-10 text-xs text-white/80">shelfpulse-j820.onrender.com</p>
-                </div>
-                <div className="glossy-gradient rounded-xl2 bg-gradient-to-br from-sky-500 to-blue-500 p-5 shadow-glow-blue">
-                  <p className="relative z-10 text-xs uppercase tracking-wide text-white/80">Quick launch</p>
-                  <p className="relative z-10 mt-2 text-lg font-semibold text-white">RetailSuite</p>
-                  <p className="relative z-10 text-xs text-white/80">retailsuite.onrender.com</p>
-                </div>
+                {QUICK_LAUNCH.map((app) => (
+                  <a
+                    key={app.name}
+                    href={app.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`glossy-gradient block rounded-xl2 bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${
+                      app.name === "ShelfPulse"
+                        ? "from-pink-500 to-rose-400 shadow-glow-pink"
+                        : "from-sky-500 to-blue-500 shadow-glow-blue"
+                    }`}
+                  >
+                    <p className="relative z-10 text-xs uppercase tracking-wide text-white/80">Quick launch</p>
+                    <p className="relative z-10 mt-2 text-lg font-semibold text-white">{app.name}</p>
+                    <p className="relative z-10 text-xs text-white/80">{app.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</p>
+                  </a>
+                ))}
               </div>
             </div>
 
             {/* Module shortcuts */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
-                { label: "Health", icon: HeartPulse, color: "text-accent-pink" },
-                { label: "Finance", icon: Wallet, color: "text-accent-blue" },
-                { label: "Business", icon: Briefcase, color: "text-accent-purple" },
-                { label: "Vision Board", icon: Sparkles, color: "text-accent-green" },
-              ].map(({ label, icon: Icon, color }) => (
-                <button
+                { label: "Health", href: "/health", icon: HeartPulse, color: "text-accent-pink" },
+                { label: "Finance", href: "/finance", icon: Wallet, color: "text-accent-blue" },
+                { label: "Business", href: "/business", icon: Briefcase, color: "text-accent-purple" },
+                { label: "Vision Board", href: "/vision", icon: Sparkles, color: "text-accent-green" },
+              ].map(({ label, href, icon: Icon, color }) => (
+                <Link
                   key={label}
+                  href={href}
                   className="glass-card flex flex-col items-start gap-3 rounded-xl2 p-4 text-left transition-colors hover:bg-white/[0.06]"
                 >
                   <Icon className={`relative z-10 ${color}`} size={20} />
@@ -107,7 +116,7 @@ export default function DashboardPage() {
                     {label}
                     <ChevronRight size={14} className="text-gray-500" />
                   </span>
-                </button>
+                </Link>
               ))}
             </div>
           </div>

@@ -8,19 +8,20 @@ import {
   Sparkles,
   Settings,
 } from "lucide-react";
-import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const NAV_ITEMS = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutGrid },
-  { key: "health", label: "Health & Insurance", icon: HeartPulse },
-  { key: "finance", label: "Finance", icon: Wallet },
-  { key: "business", label: "Business Projects", icon: Briefcase },
-  { key: "vision", label: "Vision & Mood Board", icon: Sparkles },
-  { key: "settings", label: "Settings", icon: Settings },
+  { key: "dashboard", label: "Dashboard", icon: LayoutGrid, href: "/dashboard" },
+  { key: "health", label: "Health & Insurance", icon: HeartPulse, href: "/health" },
+  { key: "finance", label: "Finance", icon: Wallet, href: "/finance" },
+  { key: "business", label: "Business Projects", icon: Briefcase, href: "/business" },
+  { key: "vision", label: "Vision & Mood Board", icon: Sparkles, href: "/vision" },
+  { key: "settings", label: "Settings", icon: Settings, href: "/settings" },
 ];
 
 export default function Sidebar() {
-  const [active, setActive] = useState("dashboard");
+  const pathname = usePathname();
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-white/5 bg-white/[0.03] p-5 backdrop-blur-xl">
@@ -35,12 +36,12 @@ export default function Sidebar() {
         </div>
 
         <nav className="space-y-1">
-          {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-            const isActive = key === active;
+          {NAV_ITEMS.map(({ key, label, icon: Icon, href }) => {
+            const isActive = pathname === href || pathname?.startsWith(href + "/");
             return (
-              <button
+              <Link
                 key={key}
-                onClick={() => setActive(key)}
+                href={href}
                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition-colors ${
                   isActive
                     ? "glossy-gradient bg-gradient-to-r from-accent-purple to-accent-blue text-white shadow-glow-purple"
@@ -51,7 +52,7 @@ export default function Sidebar() {
                   <Icon size={18} />
                   {label}
                 </span>
-              </button>
+              </Link>
             );
           })}
         </nav>
