@@ -6,9 +6,12 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+// Household passcode is intentionally short (6-digit shared code, not a
+// per-site password) — private 2-person app, already gated behind
+// check_login_allowed()'s 5-attempts/15-min lockout below.
 const credentialsSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(6),
 });
 
 export async function login(formData: FormData) {

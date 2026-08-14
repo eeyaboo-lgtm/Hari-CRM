@@ -51,7 +51,7 @@ export default function LoginPage({
               name="password"
               type="password"
               required
-              minLength={8}
+              minLength={6}
               className="w-full rounded-lg border border-base-border bg-base-card px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
             />
           </div>

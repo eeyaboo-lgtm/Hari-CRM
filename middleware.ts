@@ -7,22 +7,9 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
 // visitors to /login. This is a convenience gate for UX only — the real
 // authorization boundary is RLS in schema.sql, not this middleware.
 //
-// TEMP (2026-08-14): login gate disabled for a UI-only preview deploy — schema
-// migration is still blocked, so real auth doesn't work yet. Everything below
-// is unreachable until this early return is removed. REMOVE THIS BLOCK when
-// sorting out login (see PROJECT-STATUS.md).
+// RE-ENABLED 2026-08-15 — schema is live, two auth.users seeded (Shenaal/
+// Shalini), real login works. See HANDOVER.md.
 export async function middleware(request: NextRequest) {
-  // app/page.tsx's server-side redirect() to /dashboard throws in this build —
-  // handling the root redirect here instead, which is more reliable anyway.
-  if (request.nextUrl.pathname === "/") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
-  return NextResponse.next();
-}
-
-async function _disabledAuthMiddleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
