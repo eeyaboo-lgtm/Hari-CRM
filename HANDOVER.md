@@ -29,15 +29,23 @@ life-goals/trips module, Health allergy history — see commit `c872cf7`):
      timeline), Subscriptions w/ currency/tax, budget red/orange/green
      status, "Upcoming (14 days)" + "Next major payment" widgets **on the
      Finance page itself**.
-   - ❌ MISSING: bank URL field + "never save login/card details" warning
-     text on Accounts. Card `account_kind` enum (credit/debit/current/
-     checking/savings/BNPL) — cards are credit-style only right now,
-     Accounts only distinguish bank/BNPL. Loan account-number field.
-     Subscription tenure/contract-length field.
-   - ❌ MISSING on the home **Dashboard**: the Finance page's upcoming-
-     payments widget and real budget color status aren't surfaced there —
-     dashboard still shows hardcoded placeholder `RECENT_UPDATES` and a
-     static donut/trend chart, not live Finance data.
+   - ✅ DONE (commit `b6990c2`): bank URL field + never-save-login-details
+     warning on Accounts. Card `account_kind` enum (credit/debit/current/
+     checking/savings/BNPL) on every card. Loan account-number field.
+     Subscription tenure field. Storage keys bumped (`.v4`/`.v3`) since
+     these are additive required fields — old placeholder data orphaned,
+     same convention as prior bumps.
+   - ✅ DONE (commit `db0bf9a`): Dashboard home page now reads real Finance
+     data via `components/DashboardLiveWidgets.tsx` — "Recent updates"
+     placeholder replaced with a live "Upcoming payments (14 days)" card,
+     hero subtitle shows the real bill count, and a real budget-status
+     colored dot sits next to "Spending trend". The trend chart/category
+     donut are still placeholder (cosmetic only, not part of the original
+     ask).
+
+**Original 6-part feature request: ALL SIX ITEMS NOW FULLY DONE.** Only
+remaining work is the original (pre-dates this list) Supabase data-wiring
+pass — see below.
 4. **Business** — ✅ DONE. UnwindCircle + Dino History (correct
    dinohistory.com domain) added, idea journal draft-persists on every
    keystroke, Program stack section w/ presets (Render/GitHub/Supabase/
