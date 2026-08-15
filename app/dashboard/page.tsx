@@ -8,6 +8,7 @@ import {
   Wallet,
   Briefcase,
   Sparkles,
+  Award,
   ChevronRight,
 } from "lucide-react";
 
@@ -99,12 +100,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Module shortcuts */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
               {[
                 { label: "Health", href: "/health", icon: HeartPulse, color: "text-accent-pink" },
                 { label: "Finance", href: "/finance", icon: Wallet, color: "text-accent-blue" },
                 { label: "Business", href: "/business", icon: Briefcase, color: "text-accent-purple" },
                 { label: "Vision Board", href: "/vision", icon: Sparkles, color: "text-accent-green" },
+                { label: "Memberships", href: "/memberships", icon: Award, color: "text-accent-orange" },
               ].map(({ label, href, icon: Icon, color }) => (
                 <Link
                   key={label}

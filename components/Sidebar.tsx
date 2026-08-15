@@ -6,6 +6,7 @@ import {
   Wallet,
   Briefcase,
   Sparkles,
+  Award,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { key: "finance", label: "Finance", icon: Wallet, href: "/finance" },
   { key: "business", label: "Business Projects", icon: Briefcase, href: "/business" },
   { key: "vision", label: "Vision & Mood Board", icon: Sparkles, href: "/vision" },
+  { key: "memberships", label: "Memberships", icon: Award, href: "/memberships" },
   { key: "settings", label: "Settings", icon: Settings, href: "/settings" },
 ];
 
