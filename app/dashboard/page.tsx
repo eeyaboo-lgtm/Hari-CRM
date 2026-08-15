@@ -3,6 +3,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import SnapshotChart from "@/components/charts/SnapshotChart";
 import CategoryDonut from "@/components/charts/CategoryDonut";
+import { DashboardHeroSubtitle, UpcomingPaymentsCard, BudgetStatusDot } from "@/components/DashboardLiveWidgets";
 import {
   HeartPulse,
   Wallet,
@@ -12,16 +13,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-// All numbers/lists below are placeholders until each module's queries are
-// wired up (tasks #7/#8) — laid out to match the reference screenshot's grid,
-// content reworked from "banking app" to "household life dashboard."
-
-const RECENT_UPDATES = [
-  { label: "Loan installment due", who: "Shenaal", when: "18 Aug", pct: 50, color: "bg-accent-blue" },
-  { label: "Insurance renewal logged", who: "Shalini", when: "20 Aug", pct: 25, color: "bg-accent-purple" },
-  { label: "ShelfPulse health check", who: "Shared", when: "Today", pct: 15, color: "bg-accent-orange" },
-  { label: "Vision board item added", who: "Shalini", when: "12 Aug", pct: 10, color: "bg-accent-green" },
-];
+// Finance widgets below are live (components/DashboardLiveWidgets.tsx, reads
+// the same localStorage keys as app/finance/page.tsx). The spending-trend
+// chart and category-donut percentages are still placeholder until Supabase
+// wiring — see HANDOVER.md.
 
 const QUICK_LAUNCH = [
   { name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", status: "healthy" },
@@ -45,9 +40,7 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-semibold text-white">
                   This month at a glance
                 </h2>
-                <p className="mt-1 text-sm text-gray-400">
-                  3 bills due, 1 appointment upcoming, 2 projects healthy.
-                </p>
+                <DashboardHeroSubtitle />
                 <button className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-base-bg shadow-lg">
                   Quick add
                 </button>
@@ -55,28 +48,9 @@ export default function DashboardPage() {
               <div className="relative z-10 hidden h-24 w-24 rounded-full bg-gradient-to-br from-accent-purple to-accent-blue opacity-60 blur-[2px] shadow-glow-purple sm:block" />
             </div>
 
-            {/* Recent updates list + quick launch cards */}
+            {/* Upcoming payments (live) + quick launch cards */}
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="glass-card rounded-xl2 p-5">
-                <h3 className="relative z-10 mb-4 font-medium text-white">Recent updates</h3>
-                <div className="relative z-10 space-y-4">
-                  {RECENT_UPDATES.map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-200">{item.label}</p>
-                        <p className="text-xs text-gray-500">
-                          {item.who} · {item.when}
-                        </p>
-                      </div>
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-medium text-white shadow-lg ${item.color}`}
-                      >
-                        {item.pct}%
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <UpcomingPaymentsCard />
 
               <div className="space-y-4">
                 {QUICK_LAUNCH.map((app) => (
@@ -127,7 +101,9 @@ export default function DashboardPage() {
           <div className="space-y-6">
             <div className="glass-card rounded-xl2 p-5">
               <div className="relative z-10 mb-2 flex items-center justify-between">
-                <h3 className="font-medium text-white">Spending trend</h3>
+                <h3 className="flex items-center gap-2 font-medium text-white">
+                  <BudgetStatusDot /> Spending trend
+                </h3>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-400">
                   6 months
                 </span>
