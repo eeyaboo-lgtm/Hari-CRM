@@ -5,6 +5,14 @@ User pasted their original 2026-08-14 feature request back and asked for a
 gap-check. Findings (pushed this session: mobile back button, Vision
 life-goals/trips module, Health allergy history — see commit `c872cf7`):
 
+0. **Memberships module** — ✅ DONE (2026-08-15, this session, commit
+   `8ed9fe8`). New `app/memberships/page.tsx`: club/warehouse memberships +
+   loyalty cards, per-member owner filter, category (Membership/Loyalty
+   card), fee+currency, renewal cadence, renewal/expiry dates with
+   days-until badges, portal link (click-to-open), notes. Added to Sidebar
+   nav and Dashboard's module-shortcut row (now 5 tiles). Next up per the
+   priority order below: Finance field gaps (bank URL+warning, card
+   account-type enum, loan account number, subscription tenure).
 1. **Household split + PIN** — ✅ DONE. `Settings` has add/remove/rename
    members + `PinManager` (6-digit, set/change/remove). Local-only
    (`HouseholdContext`), not yet tied to real per-user Supabase rows.
