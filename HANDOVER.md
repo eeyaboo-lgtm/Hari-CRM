@@ -42,16 +42,19 @@ life-goals/trips module, Health allergy history — see commit `c872cf7`):
    dinohistory.com domain) added, idea journal draft-persists on every
    keystroke, Program stack section w/ presets (Render/GitHub/Supabase/
    Cloudflare/Spaceship), custom URL, masked email/username w/ reveal.
-5. **Vision — trips/bucket list** — ⚠️ PARTIAL. Basic goals/trips list
-   added this session (`components/VisionGoals.tsx`: type Trip/Experience/
-   Goal, target timeframe, status Idea→Planned→Booked→Done, notes). Still
-   missing: ticket-price field, dedicated website-link field, and — the
-   bigger piece — an in-depth **trip detail sub-page** per trip with
-   one-way/round-trip/per-person cost breakdown and clickable shortcuts to
-   booking sites (MakeMyTrip, Expedia, Booking.com, Trivago, Agoda,
-   TripAdvisor, Airbnb + 4 more) and, for experiences, region-specific
-   ticket-site shortcuts (UAE: Platinumlist/Cobone/Groupon/Fever; needs
-   equivalent shortlist for US + Sri Lanka).
+5. **Vision — trips/bucket list** — ✅ DONE (commit `b56e2f6`). Goals/trips
+   list (`components/VisionGoals.tsx`) plus ticket-price + reference-link
+   fields on every card. Each Trip/Experience card links to a new dynamic
+   `/vision/trip/[id]` detail sub-page (reads/writes the same `vision.goals`
+   localStorage array — single source of truth): for Trips, a cost
+   breakdown (travelers, one-way/person, round-trip/person, currency, live-
+   computed totals) plus shortcuts to 11 travel sites (MakeMyTrip, Expedia,
+   Booking.com, Trivago, Agoda, TripAdvisor, Airbnb, Skyscanner, Kayak,
+   Google Flights, Hotels.com); for Experiences, region-grouped ticket-site
+   shortcuts — UAE (Platinumlist, Cobone, Groupon UAE, Fever), Sri Lanka
+   (MyTickets.lk, Tickets.lk, TicketsMinistry, Spotseeker.lk — domains
+   confirmed via web search, not assumed), US (Eventbrite, Groupon, Viator,
+   GetYourGuide). Plus a research-notes textarea. Item 5 is fully complete.
 6. **Memberships module** — ❌ NOT DONE. No page, no dashboard shortcut.
    Distinct from Subscriptions — needs renewal/expiry/fee/payment-date
    fields, and should also cover loyalty cards + their links.
