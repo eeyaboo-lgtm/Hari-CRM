@@ -1,3 +1,69 @@
+# Hari-CRM — Session Handover (2026-08-15, latest #3)
+
+## Audit vs. the original 6-part feature request — what's still missing
+User pasted their original 2026-08-14 feature request back and asked for a
+gap-check. Findings (pushed this session: mobile back button, Vision
+life-goals/trips module, Health allergy history — see commit `c872cf7`):
+
+1. **Household split + PIN** — ✅ DONE. `Settings` has add/remove/rename
+   members + `PinManager` (6-digit, set/change/remove). Local-only
+   (`HouseholdContext`), not yet tied to real per-user Supabase rows.
+2. **Health sections** — ✅ DONE. Conditions & History, Appointments (member
+   quick-selector), Insurance (policyholder/expiry/renewal/copays/allowances/
+   coverage notes + 4 file uploads with open-in-tab/download) all separate
+   sections in `app/health/page.tsx`. Allergy history added this session.
+3. **Finance** — mostly done, real gaps remain:
+   - ✅ Per-user split + combined "Household" filter, blur-to-reveal on
+     click (implemented as CSS blur, not literal `******` masking — same
+     UX, cosmetic difference only), Cards w/ last-4 + EMI/limit/APR auto
+     calc, card spend log w/ per-entry currency, Loans w/ EMI/remaining
+     balance math, Payment schemes (university-style multi-line plans w/
+     timeline), Subscriptions w/ currency/tax, budget red/orange/green
+     status, "Upcoming (14 days)" + "Next major payment" widgets **on the
+     Finance page itself**.
+   - ❌ MISSING: bank URL field + "never save login/card details" warning
+     text on Accounts. Card `account_kind` enum (credit/debit/current/
+     checking/savings/BNPL) — cards are credit-style only right now,
+     Accounts only distinguish bank/BNPL. Loan account-number field.
+     Subscription tenure/contract-length field.
+   - ❌ MISSING on the home **Dashboard**: the Finance page's upcoming-
+     payments widget and real budget color status aren't surfaced there —
+     dashboard still shows hardcoded placeholder `RECENT_UPDATES` and a
+     static donut/trend chart, not live Finance data.
+4. **Business** — ✅ DONE. UnwindCircle + Dino History (correct
+   dinohistory.com domain) added, idea journal draft-persists on every
+   keystroke, Program stack section w/ presets (Render/GitHub/Supabase/
+   Cloudflare/Spaceship), custom URL, masked email/username w/ reveal.
+5. **Vision — trips/bucket list** — ⚠️ PARTIAL. Basic goals/trips list
+   added this session (`components/VisionGoals.tsx`: type Trip/Experience/
+   Goal, target timeframe, status Idea→Planned→Booked→Done, notes). Still
+   missing: ticket-price field, dedicated website-link field, and — the
+   bigger piece — an in-depth **trip detail sub-page** per trip with
+   one-way/round-trip/per-person cost breakdown and clickable shortcuts to
+   booking sites (MakeMyTrip, Expedia, Booking.com, Trivago, Agoda,
+   TripAdvisor, Airbnb + 4 more) and, for experiences, region-specific
+   ticket-site shortcuts (UAE: Platinumlist/Cobone/Groupon/Fever; needs
+   equivalent shortlist for US + Sri Lanka).
+6. **Memberships module** — ❌ NOT DONE. No page, no dashboard shortcut.
+   Distinct from Subscriptions — needs renewal/expiry/fee/payment-date
+   fields, and should also cover loyalty cards + their links.
+
+**Recommended next-session build order** (roughly effort-ascending):
+1. Memberships module (new page + dashboard nav entry + shortcut button) —
+   self-contained, same CRUD pattern as Health/Business.
+2. Finance gaps: bank URL + warning text, card `account_kind` enum, loan
+   account number, subscription tenure field — all small additive changes
+   to existing types/forms in `app/finance/page.tsx`.
+3. Dashboard home page: replace hardcoded `RECENT_UPDATES`/donut-placeholder
+   with real Finance upcoming-payments + budget-status data (still reading
+   from the same localStorage keys Finance uses, until Supabase wiring).
+4. Vision trip detail sub-page + booking/ticket site shortcut lists — the
+   largest remaining item, probably its own session.
+5. Then the original Supabase data-wiring pass (Finance/Health/Business/
+   Vision → real queries, ~1900 lines, pattern already locked in below).
+
+---
+
 # Hari-CRM — Session Handover (2026-08-15, later)
 
 ## AUTH IS NOW LIVE + DATA-WIRING DESIGN LOCKED IN (2026-08-15, continued)
