@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { HouseholdProvider } from "@/lib/HouseholdContext";
 import ProfileGate from "@/components/ProfileGate";
+import MobileBackButton from "@/components/MobileBackButton";
 
 export const metadata: Metadata = {
   title: "Hari-CRM — Life Dashboard",
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-base-bg text-gray-200 antialiased">
         <HouseholdProvider>
+          <MobileBackButton />
           <ProfileGate>{children}</ProfileGate>
         </HouseholdProvider>
       </body>

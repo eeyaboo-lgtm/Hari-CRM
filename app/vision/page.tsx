@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import VisionBoard from "@/components/VisionBoard";
+import VisionGoals from "@/components/VisionGoals";
 
 export default function VisionPage() {
   return (
@@ -13,6 +14,7 @@ export default function VisionPage() {
             a card to move it, drag the corner handle to resize, click the × to delete.
           </p>
         </div>
+        <VisionGoals />
         <VisionBoard />
       </main>
     </div>

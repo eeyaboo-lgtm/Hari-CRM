@@ -6,6 +6,14 @@ import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { Download, ExternalLink, FileUp, Plus, Trash2, X } from "lucide-react";
 
+type AllergyStatus = "confirmed" | "suspected" | "safe";
+
+const ALLERGY_STATUS_META: Record<AllergyStatus, { label: string; color: string }> = {
+  confirmed: { label: "Confirmed reaction", color: "bg-red-500/15 text-red-300 border-red-500/30" },
+  suspected: { label: "Suspected / likely", color: "bg-accent-orange/15 text-accent-orange border-accent-orange/30" },
+  safe: { label: "Tested — safe", color: "bg-accent-green/15 text-accent-green border-accent-green/30" },
+};
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -102,6 +110,163 @@ function ConditionsSection() {
               <X size={14} />
             </button>
           </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/* Allergies — trial-and-error reaction history                            */
+/* ---------------------------------------------------------------------- */
+
+type AllergyEntry = {
+  id: string;
+  memberId: string;
+  trigger: string;
+  status: AllergyStatus;
+  reaction: string;
+  date: string;
+  notes: string;
+};
+
+function AllergyCard({
+  entry,
+  onUpdate,
+  onRemove,
+}: {
+  entry: AllergyEntry;
+  onUpdate: (e: AllergyEntry) => void;
+  onRemove: () => void;
+}) {
+  const { members } = useHousehold();
+  const meta = ALLERGY_STATUS_META[entry.status];
+
+  return (
+    <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
+            <select
+              value={entry.memberId}
+              onChange={(e) => onUpdate({ ...entry, memberId: e.target.value })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Trigger / substance</label>
+            <input
+              value={entry.trigger}
+              onChange={(e) => onUpdate({ ...entry, trigger: e.target.value })}
+              placeholder="e.g. Penicillin, peanuts, shellfish"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Status</label>
+            <select
+              value={entry.status}
+              onChange={(e) => onUpdate({ ...entry, status: e.target.value as AllergyStatus })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {(Object.keys(ALLERGY_STATUS_META) as AllergyStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {ALLERGY_STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Date noted</label>
+            <input
+              type="date"
+              value={entry.date}
+              onChange={(e) => onUpdate({ ...entry, date: e.target.value })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
+        </div>
+        <button type="button" onClick={onRemove} className="shrink-0 text-gray-500 hover:text-red-400" title="Remove">
+          <Trash2 size={16} />
+        </button>
+      </div>
+      <div className="mb-3">
+        <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
+        <input
+          value={entry.reaction}
+          onChange={(e) => onUpdate({ ...entry, reaction: e.target.value })}
+          placeholder="e.g. Hives, swelling, no reaction after trial dose"
+          className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+      </div>
+      <div className="mb-3">
+        <label className="mb-1 block text-xs text-gray-500">Notes</label>
+        <textarea
+          value={entry.notes}
+          onChange={(e) => onUpdate({ ...entry, notes: e.target.value })}
+          placeholder="Context — how it was tried, dosage, what triggered the trial, doctor advice..."
+          rows={2}
+          className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+      </div>
+      <span className={`relative z-10 inline-block rounded-full border px-2.5 py-0.5 text-xs ${meta.color}`}>{meta.label}</span>
+    </div>
+  );
+}
+
+function AllergiesSection() {
+  const { members, activeMemberId } = useHousehold();
+  const [entries, setEntries] = useLocalStorage<AllergyEntry[]>("health.allergies", []);
+
+  const addEntry = () => {
+    setEntries((prev) => [
+      {
+        id: uid(),
+        memberId: activeMemberId ?? members[0]?.id ?? "",
+        trigger: "",
+        status: "suspected",
+        reaction: "",
+        date: "",
+        notes: "",
+      },
+      ...prev,
+    ]);
+  };
+  const updateEntry = (id: string, e: AllergyEntry) => setEntries((prev) => prev.map((x) => (x.id === id ? e : x)));
+  const removeEntry = (id: string) => setEntries((prev) => prev.filter((x) => x.id !== id));
+
+  const confirmedCount = entries.filter((e) => e.status === "confirmed").length;
+
+  return (
+    <section className="glass-card rounded-xl2 p-5">
+      <div className="relative z-10 mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-medium text-white">Allergy history</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Trial-and-error log — what's caused a reaction, what's only suspected, and what's been tested and
+            found safe.
+            {entries.length > 0 ? ` ${confirmedCount} confirmed of ${entries.length} logged.` : ""}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={addEntry}
+          className="flex shrink-0 items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white"
+        >
+          <Plus size={14} /> Add allergy
+        </button>
+      </div>
+      <div className="relative z-10 space-y-3">
+        {entries.length === 0 && <p className="text-xs text-gray-500">Nothing logged yet.</p>}
+        {entries.map((e) => (
+          <AllergyCard key={e.id} entry={e} onUpdate={(v) => updateEntry(e.id, v)} onRemove={() => removeEntry(e.id)} />
         ))}
       </div>
     </section>
@@ -437,11 +602,12 @@ export default function HealthPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Health &amp; Insurance</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Conditions &amp; history, appointments, and insurance — each entry is tagged to a household member.
-            Will move to Supabase (health_records, health_appointments, health_insurance) once wired up.
+            Conditions &amp; history, allergies, appointments, and insurance — each entry is tagged to a household
+            member. Will move to Supabase (health_records, health_appointments, health_insurance) once wired up.
           </p>
         </div>
         <ConditionsSection />
+        <AllergiesSection />
         <AppointmentsSection />
         <InsuranceSection />
       </main>
