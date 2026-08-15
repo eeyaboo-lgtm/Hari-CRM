@@ -1,85 +1,68 @@
-# Hari-CRM — Session Handover (2026-08-15, latest #3)
+# Hari-CRM — Session Handover (2026-08-15, latest #6 — READ THIS FIRST)
 
-## Audit vs. the original 6-part feature request — what's still missing
-User pasted their original 2026-08-14 feature request back and asked for a
-gap-check. Findings (pushed this session: mobile back button, Vision
-life-goals/trips module, Health allergy history — see commit `c872cf7`):
+## Status: the entire 2026-08-14 6-part feature request is DONE
+User's original 6-part request (household PIN split, Health sections,
+Finance, Business, Vision trips/goals, Memberships) is **fully built,
+build-verified, and live** as of this session. Nothing from that list is
+outstanding. Commits, newest first: `db0bf9a` (Dashboard live Finance
+widgets), `b6990c2` (Finance field gaps), `b56e2f6` (Vision trip detail
+pages), `8ed9fe8` (Memberships module), `c872cf7` (mobile back button +
+Vision goals list + Health allergies), `0b6f275` (logout button).
 
-0. **Memberships module** — ✅ DONE (2026-08-15, this session, commit
-   `8ed9fe8`). New `app/memberships/page.tsx`: club/warehouse memberships +
-   loyalty cards, per-member owner filter, category (Membership/Loyalty
-   card), fee+currency, renewal cadence, renewal/expiry dates with
-   days-until badges, portal link (click-to-open), notes. Added to Sidebar
-   nav and Dashboard's module-shortcut row (now 5 tiles). Next up per the
-   priority order below: Finance field gaps (bank URL+warning, card
-   account-type enum, loan account number, subscription tenure).
-1. **Household split + PIN** — ✅ DONE. `Settings` has add/remove/rename
-   members + `PinManager` (6-digit, set/change/remove). Local-only
-   (`HouseholdContext`), not yet tied to real per-user Supabase rows.
-2. **Health sections** — ✅ DONE. Conditions & History, Appointments (member
-   quick-selector), Insurance (policyholder/expiry/renewal/copays/allowances/
-   coverage notes + 4 file uploads with open-in-tab/download) all separate
-   sections in `app/health/page.tsx`. Allergy history added this session.
-3. **Finance** — mostly done, real gaps remain:
-   - ✅ Per-user split + combined "Household" filter, blur-to-reveal on
-     click (implemented as CSS blur, not literal `******` masking — same
-     UX, cosmetic difference only), Cards w/ last-4 + EMI/limit/APR auto
-     calc, card spend log w/ per-entry currency, Loans w/ EMI/remaining
-     balance math, Payment schemes (university-style multi-line plans w/
-     timeline), Subscriptions w/ currency/tax, budget red/orange/green
-     status, "Upcoming (14 days)" + "Next major payment" widgets **on the
-     Finance page itself**.
-   - ✅ DONE (commit `b6990c2`): bank URL field + never-save-login-details
-     warning on Accounts. Card `account_kind` enum (credit/debit/current/
-     checking/savings/BNPL) on every card. Loan account-number field.
-     Subscription tenure field. Storage keys bumped (`.v4`/`.v3`) since
-     these are additive required fields — old placeholder data orphaned,
-     same convention as prior bumps.
-   - ✅ DONE (commit `db0bf9a`): Dashboard home page now reads real Finance
-     data via `components/DashboardLiveWidgets.tsx` — "Recent updates"
-     placeholder replaced with a live "Upcoming payments (14 days)" card,
-     hero subtitle shows the real bill count, and a real budget-status
-     colored dot sits next to "Spending trend". The trend chart/category
-     donut are still placeholder (cosmetic only, not part of the original
-     ask).
+Per-item final state:
+1. **Household split + PIN** — done. `app/settings/page.tsx`:
+   add/remove/rename members + `PinManager` (6-digit set/change/remove).
+   Local-only (`HouseholdContext`), not yet tied to real per-user Supabase
+   rows — that's covered by the Supabase wiring pass below.
+2. **Health** — done. `app/health/page.tsx`: Conditions & History,
+   Allergies (trigger/status/reaction/date), Appointments (member
+   quick-selector), Insurance (policyholder/expiry/renewal/copays/
+   allowances/coverage notes + 4 file uploads, open-in-tab/download).
+3. **Finance** — done. `app/finance/page.tsx`: per-user split + combined
+   "Household" filter, blur-to-reveal balances, Cards (last-4, EMI/limit/
+   APR auto-calc, `account_kind` enum credit/debit/current/checking/
+   savings/BNPL), card spend log w/ per-entry currency, Loans (EMI/
+   remaining-balance math, account number), Payment schemes (multi-line
+   plans w/ timeline), Subscriptions (currency/tax/tenure), budget red/
+   orange/green status, Accounts (bank URL + never-save-login-details
+   warning), "Upcoming (14 days)" + "Next major payment" widgets. Storage
+   keys are `finance.accounts.v4`, `finance.cards.v4`, `finance.loans.v3`,
+   `finance.subs.v3`, `finance.schemes.v1`, `finance.cardSpends.v3` — bump
+   the version suffix again if you add more required fields (placeholder
+   data at old versions is intentionally orphaned, not migrated).
+4. **Business** — done. `app/business/page.tsx`: UnwindCircle +
+   dinohistory.com links, idea journal draft-persists every keystroke,
+   Program stack (Render/GitHub/Supabase/Cloudflare/Spaceship presets,
+   custom URL, masked email/username w/ reveal).
+5. **Vision — trips/bucket list** — done. `components/VisionGoals.tsx` (list
+   + ticket-price/link fields) + dynamic `/vision/trip/[id]` detail page:
+   cost breakdown for Trips (travelers/one-way/round-trip per person, live
+   totals) + 11 travel-site shortcuts; region-grouped ticket-site shortcuts
+   for Experiences (UAE/Sri Lanka/US — domains confirmed via web search).
+6. **Memberships** — done. New `app/memberships/page.tsx`: club/warehouse
+   memberships + loyalty cards, per-member filter, category, fee+currency,
+   renewal cadence, renewal/expiry date badges, portal link, notes. In
+   Sidebar nav + Dashboard's module-shortcut row (5 tiles).
 
-**Original 6-part feature request: ALL SIX ITEMS NOW FULLY DONE.** Only
-remaining work is the original (pre-dates this list) Supabase data-wiring
-pass — see below.
-4. **Business** — ✅ DONE. UnwindCircle + Dino History (correct
-   dinohistory.com domain) added, idea journal draft-persists on every
-   keystroke, Program stack section w/ presets (Render/GitHub/Supabase/
-   Cloudflare/Spaceship), custom URL, masked email/username w/ reveal.
-5. **Vision — trips/bucket list** — ✅ DONE (commit `b56e2f6`). Goals/trips
-   list (`components/VisionGoals.tsx`) plus ticket-price + reference-link
-   fields on every card. Each Trip/Experience card links to a new dynamic
-   `/vision/trip/[id]` detail sub-page (reads/writes the same `vision.goals`
-   localStorage array — single source of truth): for Trips, a cost
-   breakdown (travelers, one-way/person, round-trip/person, currency, live-
-   computed totals) plus shortcuts to 11 travel sites (MakeMyTrip, Expedia,
-   Booking.com, Trivago, Agoda, TripAdvisor, Airbnb, Skyscanner, Kayak,
-   Google Flights, Hotels.com); for Experiences, region-grouped ticket-site
-   shortcuts — UAE (Platinumlist, Cobone, Groupon UAE, Fever), Sri Lanka
-   (MyTickets.lk, Tickets.lk, TicketsMinistry, Spotseeker.lk — domains
-   confirmed via web search, not assumed), US (Eventbrite, Groupon, Viator,
-   GetYourGuide). Plus a research-notes textarea. Item 5 is fully complete.
-6. **Memberships module** — ❌ NOT DONE. No page, no dashboard shortcut.
-   Distinct from Subscriptions — needs renewal/expiry/fee/payment-date
-   fields, and should also cover loyalty cards + their links.
+Also done this session, not part of the original 6: logout button
+(bottom-left of Sidebar), mobile back-arrow (top-left, mobile only), and
+the Dashboard home page now reads real Finance data
+(`components/DashboardLiveWidgets.tsx`) instead of hardcoded placeholders —
+live "Upcoming payments (14 days)" card + budget-status dot next to
+"Spending trend". The spending-trend chart and category-donut percentages
+are still cosmetic placeholders (not part of any explicit ask).
 
-**Recommended next-session build order** (roughly effort-ascending):
-1. Memberships module (new page + dashboard nav entry + shortcut button) —
-   self-contained, same CRUD pattern as Health/Business.
-2. Finance gaps: bank URL + warning text, card `account_kind` enum, loan
-   account number, subscription tenure field — all small additive changes
-   to existing types/forms in `app/finance/page.tsx`.
-3. Dashboard home page: replace hardcoded `RECENT_UPDATES`/donut-placeholder
-   with real Finance upcoming-payments + budget-status data (still reading
-   from the same localStorage keys Finance uses, until Supabase wiring).
-4. Vision trip detail sub-page + booking/ticket site shortcut lists — the
-   largest remaining item, probably its own session.
-5. Then the original Supabase data-wiring pass (Finance/Health/Business/
-   Vision → real queries, ~1900 lines, pattern already locked in below).
+## What's actually left: the Supabase data-wiring pass
+Every module above (Health/Finance/Business/Vision/Memberships/Settings)
+is still 100% localStorage — nothing reads or writes the live `schema.sql`
+tables yet, even though the schema, RLS, and real auth are all in place and
+working (see the section below this one for the full owner-mapping design
+and exact per-page order). This is the one remaining piece of work
+project-wide, roughly ~1900+ lines across 5 pages now (grew slightly with
+Allergies/Memberships/trip-detail added this session). Recommended order:
+Finance first (has the most precedent/complexity — Cards/Loans/Schemes),
+then Health, then Business, then Vision (incl. the new trip-detail page),
+then Memberships, then Settings/household members last (touches auth).
 
 ---
 
