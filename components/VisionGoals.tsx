@@ -4,32 +4,42 @@
 // spirit as the mood board above it: either of you can add/edit/remove).
 // localStorage-backed for now, same as every other module pending the
 // Supabase wiring pass (see HANDOVER.md).
+import Link from "next/link";
 import { useLocalStorage } from "@/lib/useLocalStorage";
-import { Plane, Sparkle, Target, Plus, Trash2 } from "lucide-react";
+import { Plane, Sparkle, Target, Plus, Trash2, ExternalLink, MapPin } from "lucide-react";
 
-function uid() {
+export function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-type GoalType = "trip" | "experience" | "goal";
-type GoalStatus = "idea" | "planned" | "booked" | "done";
+export type GoalType = "trip" | "experience" | "goal";
+export type GoalStatus = "idea" | "planned" | "booked" | "done";
 
-type LifeGoal = {
+export type LifeGoal = {
   id: string;
   type: GoalType;
   title: string;
   target: string; // freeform timeframe, e.g. "2027", "Dec 2026", "Someday"
   notes: string;
   status: GoalStatus;
+  ticketPrice: string; // freeform, e.g. "AED 1,200 return, 2 pax"
+  link: string; // reference URL (event page, article, etc.)
+  // Optional trip cost breakdown, edited on the trip detail sub-page.
+  travelers?: number;
+  oneWayPerPerson?: number;
+  roundTripPerPerson?: number;
+  currency?: "AED" | "LKR" | "USD";
 };
 
-const TYPE_META: Record<GoalType, { label: string; icon: typeof Plane }> = {
+export const GOALS_STORAGE_KEY = "vision.goals";
+
+export const TYPE_META: Record<GoalType, { label: string; icon: typeof Plane }> = {
   trip: { label: "Trip", icon: Plane },
   experience: { label: "Experience", icon: Sparkle },
   goal: { label: "Life goal", icon: Target },
 };
 
-const STATUS_META: Record<GoalStatus, { label: string; color: string }> = {
+export const STATUS_META: Record<GoalStatus, { label: string; color: string }> = {
   idea: { label: "Idea", color: "bg-white/10 text-gray-300 border-white/10" },
   planned: { label: "Planned", color: "bg-accent-blue/15 text-accent-blue border-accent-blue/30" },
   booked: { label: "Booked", color: "bg-accent-orange/15 text-accent-orange border-accent-orange/30" },
@@ -104,6 +114,33 @@ function GoalCard({ goal, onUpdate, onRemove }: { goal: LifeGoal; onUpdate: (g: 
           <Trash2 size={16} />
         </button>
       </div>
+      <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Ticket / cost estimate</label>
+          <input
+            value={goal.ticketPrice}
+            onChange={(e) => onUpdate({ ...goal, ticketPrice: e.target.value })}
+            placeholder="e.g. AED 1,200 return, 2 pax"
+            className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Reference link</label>
+          <div className="flex items-center gap-1.5">
+            <input
+              value={goal.link}
+              onChange={(e) => onUpdate({ ...goal, link: e.target.value })}
+              placeholder="https://..."
+              className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+            {goal.link && (
+              <a href={goal.link} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-400 hover:text-white" title="Open">
+                <ExternalLink size={14} />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
       <div>
         <label className="mb-1 block text-xs text-gray-500">Notes</label>
         <textarea
@@ -114,19 +151,29 @@ function GoalCard({ goal, onUpdate, onRemove }: { goal: LifeGoal; onUpdate: (g: 
           className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
         />
       </div>
-      <span className={`relative z-10 mt-3 inline-block rounded-full border px-2.5 py-0.5 text-xs ${STATUS_META[goal.status].color}`}>
-        {STATUS_META[goal.status].label}
-      </span>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <span className={`relative z-10 inline-block rounded-full border px-2.5 py-0.5 text-xs ${STATUS_META[goal.status].color}`}>
+          {STATUS_META[goal.status].label}
+        </span>
+        {goal.type !== "goal" && (
+          <Link
+            href={`/vision/trip/${goal.id}`}
+            className="relative z-10 flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-accent-blue hover:bg-white/10 hover:text-white"
+          >
+            <MapPin size={12} /> Plan this {goal.type === "trip" ? "trip" : "experience"}
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function VisionGoals() {
-  const [goals, setGoals] = useLocalStorage<LifeGoal[]>("vision.goals", []);
+  const [goals, setGoals] = useLocalStorage<LifeGoal[]>(GOALS_STORAGE_KEY, []);
 
   const addGoal = (type: GoalType) => {
     setGoals((prev) => [
-      { id: uid(), type, title: "", target: "", notes: "", status: "idea" },
+      { id: uid(), type, title: "", target: "", notes: "", status: "idea", ticketPrice: "", link: "" },
       ...prev,
     ]);
   };
