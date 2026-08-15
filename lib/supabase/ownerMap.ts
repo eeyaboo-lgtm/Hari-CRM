@@ -1,79 +1,114 @@
 "use client";
 
-// Bridges the app's local household-member concept ("shenaal" | "shalini" |
-// "shared", from HouseholdContext) to the schema's real model (owner_id uuid
-// + a visibility flag). There is no "shared" row type in the DB — only a
-// real person's uuid plus a visibility level.
+// Bridges the app's local household-member concept (HouseholdContext's
+// member ids) to the schema's real model (owner_id uuid + a visibility
+// flag), generalized for N walled-off households + an admin overlay role.
 //
-// Locked design (see memory "Hari-CRM Project Info", 2026-08-15):
-//   local "shenaal" -> Shenaal's real profiles.id, visibility='shared_view'
-//   local "shalini" -> Shalini's real profiles.id, visibility='shared_view'
-//   local "shared"  -> current signed-in user's id, visibility='mirrored_edit'
-//     (either household member can then edit it, via RLS)
+// Design (2026-08-15, multi-household rewrite):
+//   - Every real household member's local id IS their real profiles.id
+//     (no more hardcoded "shenaal"/"shalini" string matching — that only
+//     ever worked for exactly one hardcoded 2-person household).
+//   - local "shared" (or any unrecognized/legacy local id, e.g. old cached
+//     "shenaal" strings from before this rewrite, or a custom member added
+//     via HouseholdContext.addMember) -> the acting user's id,
+//     visibility='mirrored_edit' (any household member can then edit it).
+//   - Admin has no household of its own. When admin is "viewing as" a
+//     household (see setAdminViewingHousehold), new rows are attributed to
+//     that household's own first real member — not admin's uid — so the
+//     actual family sees and can edit them too, not just admin.
 //
-// Reverse (reading a row back into the local shape):
-//   visibility === 'mirrored_edit'                -> 'shared'
-//   owner_id matches Shenaal's profile id          -> 'shenaal'
-//   owner_id matches Shalini's profile id          -> 'shalini'
-//
-// This is the ONLY place that should know about this mapping — pages should
-// call resolveOwner/unresolveOwner rather than touching profiles directly.
+// Reverse (reading a row back into local UI state):
+//   visibility === 'mirrored_edit'      -> 'shared'
+//   owner_id is one of this household's real member ids -> that id, as-is
+//   anything else                       -> 'shared' (safe fallback)
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type Visibility = "private" | "shared_view" | "mirrored_edit";
 
 export type OwnerMap = {
-  shenaalId: string | null;
-  shaliniId: string | null;
   currentUserId: string | null;
-  /** local ownerId ("shenaal" | "shalini" | "shared" | anything else) -> DB row fields */
+  isAdmin: boolean;
+  householdId: string | null;
+  memberIds: string[];
   resolveOwner: (localOwnerId: string) => { owner_id: string; visibility: Visibility };
-  /** DB row fields -> local ownerId, for reading rows back into UI state */
   unresolveOwner: (owner_id: string, visibility: string) => string;
 };
 
+const ADMIN_VIEW_KEY = "admin.viewingHouseholdId";
+
+export function getAdminViewingHouseholdId(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(ADMIN_VIEW_KEY);
+}
+
+export function setAdminViewingHousehold(householdId: string | null) {
+  if (typeof window === "undefined") return;
+  if (householdId) window.localStorage.setItem(ADMIN_VIEW_KEY, householdId);
+  else window.localStorage.removeItem(ADMIN_VIEW_KEY);
+  clearOwnerMapCache();
+}
+
 let cached: Promise<OwnerMap> | null = null;
+let cachedKey = "";
 
 export function getOwnerMap(supabase: SupabaseClient): Promise<OwnerMap> {
-  if (cached) return cached;
-  cached = build(supabase).catch((err) => {
-    cached = null; // allow retry on next call if this failed (e.g. not signed in yet)
+  const key = getAdminViewingHouseholdId() ?? "";
+  if (cached && cachedKey === key) return cached;
+  cachedKey = key;
+  cached = build(supabase, key || null).catch((err) => {
+    cached = null;
     throw err;
   });
   return cached;
 }
 
-async function build(supabase: SupabaseClient): Promise<OwnerMap> {
-  const [{ data: profiles }, { data: userData }] = await Promise.all([
-    supabase.from("profiles").select("id, role"),
-    supabase.auth.getUser(),
-  ]);
+export function clearOwnerMapCache() {
+  cached = null;
+  cachedKey = "";
+}
 
-  const shenaalId = profiles?.find((p) => p.role === "Shenaal")?.id ?? null;
-  const shaliniId = profiles?.find((p) => p.role === "Shalini")?.id ?? null;
+async function build(supabase: SupabaseClient, adminViewingHouseholdId: string | null): Promise<OwnerMap> {
+  const { data: userData } = await supabase.auth.getUser();
   const currentUserId = userData?.user?.id ?? null;
 
+  if (!currentUserId) {
+    return {
+      currentUserId: null,
+      isAdmin: false,
+      householdId: null,
+      memberIds: [],
+      resolveOwner: () => ({ owner_id: "", visibility: "private" }),
+      unresolveOwner: () => "shared",
+    };
+  }
+
+  const { data: me } = await supabase.from("profiles").select("household_id, is_admin").eq("id", currentUserId).single();
+  const isAdmin = !!me?.is_admin;
+  const householdId = isAdmin ? adminViewingHouseholdId : me?.household_id ?? null;
+
+  let memberIds: string[] = [];
+  if (householdId) {
+    const { data: members } = await supabase.from("profiles").select("id").eq("household_id", householdId);
+    memberIds = (members ?? []).map((m: any) => m.id as string);
+  } else if (!isAdmin) {
+    memberIds = [currentUserId];
+  }
+
+  // Admin acting on behalf of a household with no membership of their own
+  // there — attribute new rows to the household's own first real member.
+  const actingOwnerId = isAdmin && householdId ? memberIds[0] ?? currentUserId : currentUserId;
+
   function resolveOwner(localOwnerId: string): { owner_id: string; visibility: Visibility } {
-    const id = (localOwnerId || "").toLowerCase();
-    if (id === "shenaal" && shenaalId) return { owner_id: shenaalId, visibility: "shared_view" };
-    if (id === "shalini" && shaliniId) return { owner_id: shaliniId, visibility: "shared_view" };
-    // "shared" or any unrecognized/custom member id — fall back to the
-    // current user as owner with joint edit rights.
-    return { owner_id: currentUserId ?? shenaalId ?? shaliniId ?? "", visibility: "mirrored_edit" };
+    if (memberIds.includes(localOwnerId)) return { owner_id: localOwnerId, visibility: "shared_view" };
+    return { owner_id: actingOwnerId, visibility: "mirrored_edit" };
   }
 
   function unresolveOwner(owner_id: string, visibility: string): string {
     if (visibility === "mirrored_edit") return "shared";
-    if (owner_id === shenaalId) return "shenaal";
-    if (owner_id === shaliniId) return "shalini";
+    if (memberIds.includes(owner_id)) return owner_id;
     return "shared";
   }
 
-  return { shenaalId, shaliniId, currentUserId, resolveOwner, unresolveOwner };
-}
-
-/** Call after sign-out or when switching test users, so the next getOwnerMap() rebuilds. */
-export function clearOwnerMapCache() {
-  cached = null;
+  return { currentUserId, isAdmin, householdId, memberIds, resolveOwner, unresolveOwner };
 }

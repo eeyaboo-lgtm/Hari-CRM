@@ -8,6 +8,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Delete, Lock } from "lucide-react";
 import { useHousehold } from "@/lib/HouseholdContext";
+import PinSetupGate from "@/components/PinSetupGate";
 
 const GRADIENTS = [
   "from-accent-purple to-accent-blue",
@@ -18,13 +19,22 @@ const GRADIENTS = [
 
 export default function ProfileGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { members, activeMember, unlocked, ready, selectMember, attemptUnlock, lock } = useHousehold();
+  const { members, activeMember, unlocked, ready, isAdmin, needsPinSetup, selectMember, attemptUnlock, lock } =
+    useHousehold();
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   if (pathname === "/login") return <>{children}</>;
   if (!ready) return <div className="min-h-screen bg-base-bg" />;
+  // Admin already proved identity with a real password at /login — skip the
+  // local per-profile PIN layer entirely; they pick which household to view
+  // from Settings instead.
+  if (isAdmin) return <>{children}</>;
+  // Shared-login households (e.g. a couple with one account) must set a
+  // real PIN — which becomes their actual sign-in password — before doing
+  // anything else.
+  if (needsPinSetup) return <PinSetupGate />;
   if (activeMember && unlocked) return <>{children}</>;
 
   const needsPin = !!activeMember && !unlocked;

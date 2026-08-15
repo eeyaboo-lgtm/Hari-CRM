@@ -1,16 +1,26 @@
 "use client";
 
-// Household member registry + Netflix-style active-profile/PIN gate.
-// Client-only (localStorage + sessionStorage) until Supabase auth is wired up —
-// see PROJECT-STATUS.md. PINs are never stored in plain text: hashed with
-// SHA-256 via the browser's SubtleCrypto before touching storage.
+// Household member registry + Netflix-style active-profile/PIN gate, now
+// generalized for multiple walled-off households + an admin overlay role
+// (2026-08-15 multi-household rewrite).
+//
+// PINs are never stored in plain text: hashed with SHA-256 via the
+// browser's SubtleCrypto before touching storage.
 //
 // Storage split is intentional:
 //   household.members            -> localStorage (persists across browser sessions)
 //   household.activeMemberId/unlocked -> sessionStorage (re-pick profile each new
 //                                        browser session, like Netflix)
+//
+// Member ids are now real profiles.id uuids (fetched from Supabase),
+// reconciled on load against whatever's cached locally so existing PINs
+// aren't lost. See lib/supabase/ownerMap.ts for why this matters — it's
+// what lets Finance/Health/etc. attribute data to the right real person
+// without a household-specific hardcoded mapping.
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
 
 export type HouseholdMember = {
   id: string;
@@ -23,11 +33,6 @@ const MEMBERS_KEY = "household.members";
 const ACTIVE_KEY = "household.activeMemberId";
 const UNLOCKED_KEY = "household.unlocked";
 
-const DEFAULT_MEMBERS: HouseholdMember[] = [
-  { id: "shenaal", name: "Shenaal", initial: "S", pinHash: null },
-  { id: "shalini", name: "Shalini", initial: "S", pinHash: null },
-];
-
 async function sha256Hex(text: string): Promise<string> {
   const enc = new TextEncoder().encode(text);
   const buf = await crypto.subtle.digest("SHA-256", enc);
@@ -36,12 +41,39 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
+// Reconciles the locally-cached member list with the real household
+// roster: matches by name (case-insensitive) so an existing member's
+// pinHash carries over onto their real profile uuid, rather than
+// resetting. Anything local that doesn't match a real profile (a custom
+// label someone added) is kept, not silently dropped.
+function mergeRealMembers(prevLocal: HouseholdMember[], real: { id: string; name: string }[]): HouseholdMember[] {
+  const usedPrevIdx = new Set<number>();
+  const merged: HouseholdMember[] = real.map((r) => {
+    const idx = prevLocal.findIndex(
+      (m, i) => !usedPrevIdx.has(i) && m.name.trim().toLowerCase() === r.name.trim().toLowerCase()
+    );
+    if (idx >= 0) {
+      usedPrevIdx.add(idx);
+      return { ...prevLocal[idx], id: r.id, name: r.name };
+    }
+    return { id: r.id, name: r.name, initial: r.name.charAt(0).toUpperCase() || "?", pinHash: null };
+  });
+  prevLocal.forEach((m, i) => {
+    if (!usedPrevIdx.has(i)) merged.push(m);
+  });
+  return merged;
+}
+
 type Ctx = {
   members: HouseholdMember[];
   activeMemberId: string | null;
   activeMember: HouseholdMember | null;
   unlocked: boolean;
   ready: boolean;
+  isAdmin: boolean;
+  householdId: string | null;
+  householdName: string | null;
+  needsPinSetup: boolean;
   selectMember: (id: string) => void;
   attemptUnlock: (pin: string) => Promise<boolean>;
   lock: () => void;
@@ -51,15 +83,55 @@ type Ctx = {
   setPin: (id: string, pin: string) => Promise<void>;
   changePin: (id: string, currentPin: string, newPin: string) => Promise<boolean>;
   removePin: (id: string, currentPin: string) => Promise<boolean>;
+  refreshHousehold: () => Promise<void>;
+  markPinSetupComplete: () => void;
 };
 
 const HouseholdCtx = createContext<Ctx | null>(null);
 
 export function HouseholdProvider({ children }: { children: React.ReactNode }) {
-  const [members, setMembers] = useState<HouseholdMember[]>(DEFAULT_MEMBERS);
+  const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [ready, setReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [householdName, setHouseholdName] = useState<string | null>(null);
+  const [needsPinSetup, setNeedsPinSetup] = useState(false);
+
+  const loadRealHousehold = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const uid = userData?.user?.id;
+      if (!uid) return;
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("household_id, is_admin, needs_pin_setup")
+        .eq("id", uid)
+        .single();
+      if (!me) return;
+      const admin = !!me.is_admin;
+      const hid = admin ? getAdminViewingHouseholdId() : me.household_id;
+      setIsAdmin(admin);
+      setHouseholdId(hid);
+      setNeedsPinSetup(!admin && !!me.needs_pin_setup);
+
+      if (!hid) {
+        setHouseholdName(null);
+        return;
+      }
+      const [{ data: household }, { data: rows }] = await Promise.all([
+        supabase.from("households").select("name").eq("id", hid).single(),
+        supabase.from("profiles").select("id, display_name").eq("household_id", hid),
+      ]);
+      setHouseholdName(household?.name ?? null);
+      const real = (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.display_name as string }));
+      setMembers((prevLocal) => mergeRealMembers(prevLocal, real));
+    } catch {
+      // offline/unavailable — local cache (already loaded below) still works
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -72,7 +144,8 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // storage unavailable — fall back to defaults, gate still works in-memory
     }
-    setReady(true);
+    loadRealHousehold().finally(() => setReady(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -187,6 +260,8 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
     [members]
   );
 
+  const markPinSetupComplete = useCallback(() => setNeedsPinSetup(false), []);
+
   return (
     <HouseholdCtx.Provider
       value={{
@@ -195,6 +270,10 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
         activeMember,
         unlocked,
         ready,
+        isAdmin,
+        householdId,
+        householdName,
+        needsPinSetup,
         selectMember,
         attemptUnlock,
         lock,
@@ -204,6 +283,8 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
         setPin,
         changePin,
         removePin,
+        refreshHousehold: loadRealHousehold,
+        markPinSetupComplete,
       }}
     >
       {children}

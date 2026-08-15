@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useHousehold } from "@/lib/HouseholdContext";
-import { Bell, Lock, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { setAdminViewingHousehold, getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
+import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions";
+import { Bell, Building2, Check, Key, Lock, Plus, RotateCcw, ShieldCheck, Trash2, Users } from "lucide-react";
 
 type Notif = { emailReminders: boolean; browserAlerts: boolean; weeklyDigest: boolean };
 
@@ -124,8 +127,248 @@ function PinManager({ memberId, hasPin }: { memberId: string; hasPin: boolean })
   );
 }
 
+type HouseholdRow = { id: string; name: string; slug: string };
+
+function AdminHouseholdSwitcher() {
+  const { refreshHousehold } = useHousehold();
+  const [households, setHouseholds] = useState<HouseholdRow[]>([]);
+  const [current, setCurrent] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("households").select("id, name, slug").order("name");
+      if (!error && data) setHouseholds(data as HouseholdRow[]);
+      setCurrent(getAdminViewingHouseholdId() ?? "");
+      setLoading(false);
+    })();
+  }, []);
+
+  const pick = async (id: string) => {
+    setCurrent(id);
+    setAdminViewingHousehold(id || null);
+    await refreshHousehold();
+  };
+
+  return (
+    <section className="glass-card rounded-xl2 p-5">
+      <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+        <Building2 size={16} className="text-accent-orange" /> Admin — viewing household
+      </h2>
+      <p className="relative z-10 mb-4 text-sm text-gray-400">
+        You're signed in as admin, which has no household data of its own. Pick a household below to view and
+        edit its dashboard on their behalf — every other page will show their data until you switch or sign out.
+      </p>
+      <div className="relative z-10">
+        {loading ? (
+          <p className="text-xs text-gray-500">Loading households...</p>
+        ) : (
+          <select
+            value={current}
+            onChange={(e) => pick(e.target.value)}
+            className="w-full max-w-sm rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          >
+            <option value="">Choose a household...</option>
+            {households.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </section>
+  );
+}
+
+type LoginRow = { householdId: string; householdName: string; userId: string; email: string; displayName: string };
+
+function AdminAccountRecovery() {
+  const [logins, setLogins] = useState<LoginRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const [newPw, setNewPw] = useState("");
+  const [forcePin, setForcePin] = useState(true);
+  const [msg, setMsg] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    listHouseholdLogins()
+      .then(setLogins)
+      .catch(() => setLogins([]))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const reset = async (row: LoginRow) => {
+    if (newPw.length < 6) {
+      setMsg((m) => ({ ...m, [row.userId]: "Must be at least 6 characters" }));
+      return;
+    }
+    setBusy(true);
+    const res = await adminResetPassword(row.userId, newPw, forcePin);
+    setBusy(false);
+    setMsg((m) => ({ ...m, [row.userId]: res.ok ? "Done — give them the new one to sign in with" : res.error }));
+    if (res.ok) {
+      setNewPw("");
+      setTimeout(() => setOpenFor(null), 1200);
+    }
+  };
+
+  return (
+    <section className="glass-card rounded-xl2 p-5">
+      <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+        <RotateCcw size={16} className="text-accent-pink" /> Admin — reset a household's login
+      </h2>
+      <p className="relative z-10 mb-4 text-sm text-gray-400">
+        If someone's locked out, set a one-time password/PIN here and pass it along. With "force PIN setup"
+        checked, they'll be required to set their own PIN (or password) the moment they sign in with it — same
+        forced first-launch flow as a brand new account.
+      </p>
+      <div className="relative z-10 space-y-2">
+        {loading && <p className="text-xs text-gray-500">Loading logins...</p>}
+        {!loading &&
+          logins.map((row) => (
+            <div key={row.userId} className="rounded-xl bg-base-card/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm text-gray-200">
+                    {row.householdName} <span className="text-xs text-gray-500">— {row.displayName}</span>
+                  </p>
+                  <p className="text-xs text-gray-500">{row.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpenFor(openFor === row.userId ? null : row.userId)}
+                  className="rounded-lg border border-base-border px-2.5 py-1 text-xs text-gray-300 hover:border-accent-purple hover:text-white"
+                >
+                  Reset password
+                </button>
+              </div>
+              {openFor === row.userId && (
+                <div className="mt-2 space-y-2 border-t border-base-border pt-2">
+                  <input
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    placeholder="One-time password / PIN (6+ chars)"
+                    className="w-full max-w-xs rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <input type="checkbox" checked={forcePin} onChange={(e) => setForcePin(e.target.checked)} />
+                    Force PIN setup on next sign-in
+                  </label>
+                  {msg[row.userId] && <p className="text-xs text-accent-orange">{msg[row.userId]}</p>}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => reset(row)}
+                    className="rounded-lg bg-accent-purple px-2.5 py-1 text-xs text-white disabled:opacity-50"
+                  >
+                    Confirm reset
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        {!loading && logins.length === 0 && <p className="text-xs text-gray-500">No household logins found.</p>}
+      </div>
+    </section>
+  );
+}
+
+function SignInCredentialManager() {
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setMsg("");
+    if (newPw.length < 6) {
+      setMsg("New password/PIN must be at least 6 characters");
+      return;
+    }
+    if (newPw !== confirmPw) {
+      setMsg("New values don't match");
+      return;
+    }
+    setBusy(true);
+    try {
+      const supabase = createClient();
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData?.user?.email;
+      if (!email) throw new Error("no session");
+      // Re-verify identity with the current password before changing it.
+      const { error: reauthErr } = await supabase.auth.signInWithPassword({ email, password: currentPw });
+      if (reauthErr) {
+        setMsg("Current password/PIN is wrong");
+        setBusy(false);
+        return;
+      }
+      const { error: updateErr } = await supabase.auth.updateUser({ password: newPw });
+      if (updateErr) throw updateErr;
+      setMsg("Updated");
+      setCurrentPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err) {
+      console.error("[SignInCredentialManager] update failed", err);
+      setMsg("Couldn't update — try again");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="glass-card rounded-xl2 p-5">
+      <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+        <Key size={16} className="text-accent-blue" /> Sign-in password / PIN
+      </h2>
+      <p className="relative z-10 mb-4 text-sm text-gray-400">
+        This is your real sign-in credential (what you type at the login screen) — different from the optional
+        per-profile quick-unlock PIN below.
+      </p>
+      <div className="relative z-10 grid max-w-md gap-2">
+        <input
+          type="password"
+          value={currentPw}
+          onChange={(e) => setCurrentPw(e.target.value)}
+          placeholder="Current password / PIN"
+          className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <input
+          type="password"
+          value={newPw}
+          onChange={(e) => setNewPw(e.target.value)}
+          placeholder="New password / PIN"
+          className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <input
+          type="password"
+          value={confirmPw}
+          onChange={(e) => setConfirmPw(e.target.value)}
+          placeholder="Confirm new password / PIN"
+          className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        {msg && <p className="text-xs text-accent-orange">{msg}</p>}
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          className="flex w-fit items-center gap-1.5 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white disabled:opacity-50"
+        >
+          <Check size={14} /> Update
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
-  const { members, addMember, removeMember, renameMember } = useHousehold();
+  const { members, addMember, removeMember, renameMember, isAdmin } = useHousehold();
   const [newName, setNewName] = useState("");
   const [notif, setNotif] = useLocalStorage<Notif>("notificationPrefs", {
     emailReminders: true,
@@ -140,6 +383,10 @@ export default function SettingsPage() {
       <Sidebar />
       <main className="flex-1 space-y-6 p-6">
         <h1 className="text-2xl font-semibold text-white">Settings</h1>
+
+        {isAdmin && <AdminHouseholdSwitcher />}
+        {isAdmin && <AdminAccountRecovery />}
+        {!isAdmin && <SignInCredentialManager />}
 
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 font-medium text-white">Appearance</h2>

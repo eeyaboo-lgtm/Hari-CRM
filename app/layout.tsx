@@ -6,7 +6,7 @@ import MobileBackButton from "@/components/MobileBackButton";
 
 export const metadata: Metadata = {
   title: "Hari-CRM — Life Dashboard",
-  description: "Shenaal & Shalini's shared life dashboard.",
+  description: "A private, walled-off life dashboard per household — health, finance, business & vision.",
 };
 
 // Applied before paint so switching to light mode on a previous visit
