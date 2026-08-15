@@ -16,12 +16,14 @@ import {
   budgetStatus,
   BUDGET_STATUS_CLASSES,
 } from "@/lib/financeUtils";
-import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap } from "lucide-react";
+import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle } from "lucide-react";
 
 type Currency = "AED" | "LKR" | "USD";
-type Account = { id: string; ownerId: string; name: string; type: "bank" | "bnpl"; currency: Currency; balance: number };
+type AccountKind = "credit" | "debit" | "current" | "checking" | "savings" | "bnpl";
+type Account = { id: string; ownerId: string; name: string; type: "bank" | "bnpl"; currency: Currency; balance: number; bankUrl: string };
 type CardAcct = {
   id: string; ownerId: string; name: string; network: "visa" | "mastercard" | "other";
+  accountKind: AccountKind;
   last4: string; currency: Currency; creditLimit: number; limitUsed: number;
   interestRate: number; tenureMonths: number; outstanding: number;
 };
@@ -29,10 +31,16 @@ type CardSpend = { id: string; cardId: string; label: string; amount: number; cu
 type Loan = {
   id: string; ownerId: string; name: string; lenderType: "bank" | "person" | "institution";
   currency: Currency; principal: number; interestRate: number; tenureMonths: number; startDate: string;
+  accountNumber: string;
 };
 type Sub = {
   id: string; ownerId: string; provider: string; currency: Currency; amount: number;
   cadence: "monthly" | "yearly"; billingDay: number; nextDate: string; taxPct: number;
+  tenureMonths: number; // contract length, 0 = open-ended/no fixed term
+};
+
+const ACCOUNT_KIND_LABEL: Record<AccountKind, string> = {
+  credit: "Credit", debit: "Debit", current: "Current", checking: "Checking", savings: "Savings", bnpl: "BNPL",
 };
 type SchemeCadence = "onetime" | "monthly" | "termly" | "yearly";
 type SchemeItem = { id: string; label: string; amount: number; cadence: SchemeCadence; dueDate: string; billingDay: number; paid: boolean };
@@ -41,21 +49,21 @@ type Scheme = { id: string; ownerId: string; name: string; institution: string; 
 const SHARED = { id: "shared", name: "Shared", initial: "H" };
 
 const DEFAULT_ACCOUNTS: Account[] = [
-  { id: "a1", ownerId: "shared", name: "Joint savings", type: "bank", currency: "AED", balance: 18420 },
-  { id: "a2", ownerId: "shenaal", name: "Shenaal salary account", type: "bank", currency: "LKR", balance: 340000 },
-  { id: "a3", ownerId: "shalini", name: "Shalini USD savings", type: "bank", currency: "USD", balance: 5200 },
+  { id: "a1", ownerId: "shared", name: "Joint savings", type: "bank", currency: "AED", balance: 18420, bankUrl: "" },
+  { id: "a2", ownerId: "shenaal", name: "Shenaal salary account", type: "bank", currency: "LKR", balance: 340000, bankUrl: "" },
+  { id: "a3", ownerId: "shalini", name: "Shalini USD savings", type: "bank", currency: "USD", balance: 5200, bankUrl: "" },
 ];
 const DEFAULT_CARDS: CardAcct[] = [
-  { id: "c1", ownerId: "shenaal", name: "Emirates NBD", network: "visa", last4: "4471", currency: "AED", creditLimit: 15000, limitUsed: 4200, interestRate: 3.2, tenureMonths: 0, outstanding: 4200 },
+  { id: "c1", ownerId: "shenaal", name: "Emirates NBD", network: "visa", accountKind: "credit", last4: "4471", currency: "AED", creditLimit: 15000, limitUsed: 4200, interestRate: 3.2, tenureMonths: 0, outstanding: 4200 },
 ];
 const DEFAULT_LOANS: Loan[] = [
-  { id: "l1", ownerId: "shared", name: "Car loan", lenderType: "bank", currency: "AED", principal: 42000, interestRate: 4.5, tenureMonths: 36, startDate: "2025-07-01" },
-  { id: "l2", ownerId: "shenaal", name: "Home renovation", lenderType: "person", currency: "LKR", principal: 1200000, interestRate: 0, tenureMonths: 24, startDate: "2025-11-01" },
+  { id: "l1", ownerId: "shared", name: "Car loan", lenderType: "bank", currency: "AED", principal: 42000, interestRate: 4.5, tenureMonths: 36, startDate: "2025-07-01", accountNumber: "" },
+  { id: "l2", ownerId: "shenaal", name: "Home renovation", lenderType: "person", currency: "LKR", principal: 1200000, interestRate: 0, tenureMonths: 24, startDate: "2025-11-01", accountNumber: "" },
 ];
 const DEFAULT_SUBS: Sub[] = [
-  { id: "s1", ownerId: "shared", provider: "Netflix", currency: "AED", amount: 39, cadence: "monthly", billingDay: 18, nextDate: "", taxPct: 5 },
-  { id: "s2", ownerId: "shalini", provider: "iCloud storage", currency: "USD", amount: 3, cadence: "monthly", billingDay: 24, nextDate: "", taxPct: 0 },
-  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: monthsFromNowIso(3), taxPct: 5 },
+  { id: "s1", ownerId: "shared", provider: "Netflix", currency: "AED", amount: 39, cadence: "monthly", billingDay: 18, nextDate: "", taxPct: 5, tenureMonths: 0 },
+  { id: "s2", ownerId: "shalini", provider: "iCloud storage", currency: "USD", amount: 3, cadence: "monthly", billingDay: 24, nextDate: "", taxPct: 0, tenureMonths: 0 },
+  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: monthsFromNowIso(3), taxPct: 5, tenureMonths: 0 },
 ];
 const DEFAULT_SCHEMES: Scheme[] = [
   {
@@ -98,14 +106,15 @@ export default function FinancePage() {
   const owners = useMemo(() => [...members, SHARED], [members]);
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
 
-  // .v3: bumped again — Account dropped `sensitive` (blur is now a global
-  // toggle, not per-account), CardSpend gained `currency`. Old .v2 data is
-  // orphaned rather than migrated (still placeholder data).
-  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v3", DEFAULT_ACCOUNTS);
-  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v3", DEFAULT_CARDS);
+  // .v4/.v3: bumped again — Account gained `bankUrl`, CardAcct gained
+  // `accountKind`, Loan gained `accountNumber`, Sub gained `tenureMonths`.
+  // Old data at prior versions is orphaned rather than migrated (still
+  // placeholder data, same convention as the last bump).
+  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v4", DEFAULT_ACCOUNTS);
+  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v4", DEFAULT_CARDS);
   const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends.v3", []);
-  const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans.v2", DEFAULT_LOANS);
-  const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs.v2", DEFAULT_SUBS);
+  const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans.v3", DEFAULT_LOANS);
+  const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs.v3", DEFAULT_SUBS);
   const [schemes, setSchemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", DEFAULT_SCHEMES);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
   const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
@@ -207,11 +216,11 @@ export default function FinancePage() {
   };
 
   // ---------------- Accounts ----------------
-  const [newAccount, setNewAccount] = useState({ ownerId: "shared", name: "", type: "bank" as "bank" | "bnpl", currency: "AED" as Currency, balance: "" });
+  const [newAccount, setNewAccount] = useState({ ownerId: "shared", name: "", type: "bank" as "bank" | "bnpl", currency: "AED" as Currency, balance: "", bankUrl: "" });
   const addAccount = () => {
     if (!newAccount.name.trim() || !newAccount.balance) return;
-    setAccounts((prev) => [...prev, { id: uid(), ownerId: newAccount.ownerId, name: newAccount.name.trim(), type: newAccount.type, currency: newAccount.currency, balance: Number(newAccount.balance) }]);
-    setNewAccount({ ownerId: "shared", name: "", type: "bank", currency: "AED", balance: "" });
+    setAccounts((prev) => [...prev, { id: uid(), ownerId: newAccount.ownerId, name: newAccount.name.trim(), type: newAccount.type, currency: newAccount.currency, balance: Number(newAccount.balance), bankUrl: newAccount.bankUrl.trim() }]);
+    setNewAccount({ ownerId: "shared", name: "", type: "bank", currency: "AED", balance: "", bankUrl: "" });
   };
   const removeAccount = (id: string) => setAccounts((prev) => prev.filter((a) => a.id !== id));
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
@@ -225,15 +234,15 @@ export default function FinancePage() {
   };
 
   // ---------------- Cards ----------------
-  const [newCard, setNewCard] = useState({ ownerId: "shared", name: "", network: "visa" as CardAcct["network"], last4: "", currency: "AED" as Currency, creditLimit: "", limitUsed: "", interestRate: "", tenureMonths: "", outstanding: "" });
+  const [newCard, setNewCard] = useState({ ownerId: "shared", name: "", network: "visa" as CardAcct["network"], accountKind: "credit" as AccountKind, last4: "", currency: "AED" as Currency, creditLimit: "", limitUsed: "", interestRate: "", tenureMonths: "", outstanding: "" });
   const addCard = () => {
     if (!newCard.name.trim() || newCard.last4.length !== 4) return;
     setCards((prev) => [...prev, {
-      id: uid(), ownerId: newCard.ownerId, name: newCard.name.trim(), network: newCard.network, last4: newCard.last4,
+      id: uid(), ownerId: newCard.ownerId, name: newCard.name.trim(), network: newCard.network, accountKind: newCard.accountKind, last4: newCard.last4,
       currency: newCard.currency, creditLimit: Number(newCard.creditLimit) || 0, limitUsed: Number(newCard.limitUsed) || 0,
       interestRate: Number(newCard.interestRate) || 0, tenureMonths: Number(newCard.tenureMonths) || 0, outstanding: Number(newCard.outstanding) || 0,
     }]);
-    setNewCard({ ownerId: "shared", name: "", network: "visa", last4: "", currency: "AED", creditLimit: "", limitUsed: "", interestRate: "", tenureMonths: "", outstanding: "" });
+    setNewCard({ ownerId: "shared", name: "", network: "visa", accountKind: "credit", last4: "", currency: "AED", creditLimit: "", limitUsed: "", interestRate: "", tenureMonths: "", outstanding: "" });
   };
   const removeCard = (id: string) => {
     setCards((prev) => prev.filter((c) => c.id !== id));
@@ -263,11 +272,11 @@ export default function FinancePage() {
   };
 
   // ---------------- Loans ----------------
-  const [newLoan, setNewLoan] = useState({ ownerId: "shared", name: "", lenderType: "bank" as Loan["lenderType"], currency: "AED" as Currency, principal: "", interestRate: "", tenureMonths: "", startDate: todayIso() });
+  const [newLoan, setNewLoan] = useState({ ownerId: "shared", name: "", lenderType: "bank" as Loan["lenderType"], currency: "AED" as Currency, principal: "", interestRate: "", tenureMonths: "", startDate: todayIso(), accountNumber: "" });
   const addLoan = () => {
     if (!newLoan.name.trim() || !newLoan.principal || !newLoan.tenureMonths) return;
-    setLoans((prev) => [...prev, { id: uid(), ownerId: newLoan.ownerId, name: newLoan.name.trim(), lenderType: newLoan.lenderType, currency: newLoan.currency, principal: Number(newLoan.principal), interestRate: Number(newLoan.interestRate) || 0, tenureMonths: Number(newLoan.tenureMonths), startDate: newLoan.startDate }]);
-    setNewLoan({ ownerId: "shared", name: "", lenderType: "bank", currency: "AED", principal: "", interestRate: "", tenureMonths: "", startDate: todayIso() });
+    setLoans((prev) => [...prev, { id: uid(), ownerId: newLoan.ownerId, name: newLoan.name.trim(), lenderType: newLoan.lenderType, currency: newLoan.currency, principal: Number(newLoan.principal), interestRate: Number(newLoan.interestRate) || 0, tenureMonths: Number(newLoan.tenureMonths), startDate: newLoan.startDate, accountNumber: newLoan.accountNumber.trim() }]);
+    setNewLoan({ ownerId: "shared", name: "", lenderType: "bank", currency: "AED", principal: "", interestRate: "", tenureMonths: "", startDate: todayIso(), accountNumber: "" });
   };
   const removeLoan = (id: string) => setLoans((prev) => prev.filter((l) => l.id !== id));
   const [editingLoanId, setEditingLoanId] = useState<string | null>(null);
@@ -281,11 +290,11 @@ export default function FinancePage() {
   };
 
   // ---------------- Subscriptions ----------------
-  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: todayIso(), taxPct: "0" });
+  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0" });
   const addSub = () => {
     if (!newSub.provider.trim() || !newSub.amount) return;
-    setSubs((prev) => [...prev, { id: uid(), ownerId: newSub.ownerId, provider: newSub.provider.trim(), currency: newSub.currency, amount: Number(newSub.amount), cadence: newSub.cadence, billingDay: Number(newSub.billingDay) || 1, nextDate: newSub.nextDate, taxPct: Number(newSub.taxPct) || 0 }]);
-    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: todayIso(), taxPct: "0" });
+    setSubs((prev) => [...prev, { id: uid(), ownerId: newSub.ownerId, provider: newSub.provider.trim(), currency: newSub.currency, amount: Number(newSub.amount), cadence: newSub.cadence, billingDay: Number(newSub.billingDay) || 1, nextDate: newSub.nextDate, taxPct: Number(newSub.taxPct) || 0, tenureMonths: Number(newSub.tenureMonths) || 0 }]);
+    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0" });
   };
   const removeSub = (id: string) => setSubs((prev) => prev.filter((s) => s.id !== id));
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
@@ -433,6 +442,11 @@ export default function FinancePage() {
         {/* Accounts */}
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-2 font-medium text-white">Bank &amp; BNPL accounts</h2>
+          <p className="relative z-10 mb-3 flex items-start gap-1.5 text-xs text-accent-orange">
+            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+            Bank URL is just a quick link to the login page — never save full login credentials, passwords, or
+            complete card numbers here.
+          </p>
           {Object.keys(totalsByCurrency).length > 0 && (
             <p className="relative z-10 mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
               {Object.entries(totalsByCurrency).map(([cur, total]) => (
@@ -459,13 +473,21 @@ export default function FinancePage() {
                     </select>
                   </Field>
                   <Field label="Balance"><input type="number" value={accountDraft.balance} onChange={(e) => setAccountDraft({ ...accountDraft, balance: Number(e.target.value) })} className={smallInputCls} /></Field>
+                  <Field label="Bank URL"><input value={accountDraft.bankUrl} onChange={(e) => setAccountDraft({ ...accountDraft, bankUrl: e.target.value })} placeholder="https://..." className={inputCls} /></Field>
                   <button type="button" onClick={saveAccount} className="text-accent-green hover:text-white"><Check size={16} /></button>
                   <button type="button" onClick={() => setEditingAccountId(null)} className={iconBtnCls}><X size={16} /></button>
                 </div>
               ) : (
                 <div key={a.id} className="flex items-center justify-between text-sm">
                   <div>
-                    <p className="text-gray-200">{a.name}</p>
+                    <p className="flex items-center gap-1.5 text-gray-200">
+                      {a.name}
+                      {a.bankUrl && (
+                        <a href={a.bankUrl} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white" title="Open bank login page">
+                          <ExternalLink size={12} />
+                        </a>
+                      )}
+                    </p>
                     <p className="text-xs text-gray-500">{a.type === "bnpl" ? "BNPL" : "Bank"} · {ownerName(a.ownerId)}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -489,6 +511,7 @@ export default function FinancePage() {
               <option>AED</option><option>LKR</option><option>USD</option>
             </select>
             <input placeholder="Balance" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className={smallInputCls} />
+            <input placeholder="Bank URL (optional)" value={newAccount.bankUrl} onChange={(e) => setNewAccount((s) => ({ ...s, bankUrl: e.target.value }))} className={inputCls} />
             <button type="button" onClick={addAccount} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -512,7 +535,7 @@ export default function FinancePage() {
                       <CreditCard size={16} />
                       <div>
                         <p className="text-sm font-medium">{c.name}</p>
-                        <p className="text-xs opacity-80">{c.network.toUpperCase()} •••• {c.last4} · {ownerName(c.ownerId)}</p>
+                        <p className="text-xs opacity-80">{c.network.toUpperCase()} •••• {c.last4} · {ACCOUNT_KIND_LABEL[c.accountKind]} · {ownerName(c.ownerId)}</p>
                       </div>
                     </div>
                     <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
@@ -528,6 +551,13 @@ export default function FinancePage() {
                           <Field label="Network" dark>
                             <select value={cardDraft.network} onChange={(e) => setCardDraft({ ...cardDraft, network: e.target.value as CardAcct["network"] })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
                               <option className="text-black" value="visa">Visa</option><option className="text-black" value="mastercard">Mastercard</option><option className="text-black" value="other">Other</option>
+                            </select>
+                          </Field>
+                          <Field label="Account type" dark>
+                            <select value={cardDraft.accountKind} onChange={(e) => setCardDraft({ ...cardDraft, accountKind: e.target.value as AccountKind })} className="rounded-lg bg-white/10 px-2 py-1 text-white outline-none">
+                              {(Object.keys(ACCOUNT_KIND_LABEL) as AccountKind[]).map((k) => (
+                                <option key={k} className="text-black" value={k}>{ACCOUNT_KIND_LABEL[k]}</option>
+                              ))}
                             </select>
                           </Field>
                           <Field label="Currency" dark>
@@ -600,6 +630,11 @@ export default function FinancePage() {
             <select value={newCard.network} onChange={(e) => setNewCard((s) => ({ ...s, network: e.target.value as CardAcct["network"] }))} className={selectCls}>
               <option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="other">Other</option>
             </select>
+            <select value={newCard.accountKind} onChange={(e) => setNewCard((s) => ({ ...s, accountKind: e.target.value as AccountKind }))} className={selectCls}>
+              {(Object.keys(ACCOUNT_KIND_LABEL) as AccountKind[]).map((k) => (
+                <option key={k} value={k}>{ACCOUNT_KIND_LABEL[k]}</option>
+              ))}
+            </select>
             <input placeholder="Last 4" maxLength={4} value={newCard.last4} onChange={(e) => setNewCard((s) => ({ ...s, last4: e.target.value.replace(/\D/g, "") }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             <select value={newCard.currency} onChange={(e) => setNewCard((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
               <option>AED</option><option>LKR</option><option>USD</option>
@@ -639,6 +674,7 @@ export default function FinancePage() {
                     <Field label="APR %"><input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} className={smallInputCls} /></Field>
                     <Field label="Tenure (mo)"><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
                     <Field label="Start date"><input type="date" value={loanDraft.startDate} onChange={(e) => setLoanDraft({ ...loanDraft, startDate: e.target.value })} className={selectCls} /></Field>
+                    <Field label="Account #"><input value={loanDraft.accountNumber} onChange={(e) => setLoanDraft({ ...loanDraft, accountNumber: e.target.value })} className={inputCls} /></Field>
                     <button type="button" onClick={saveLoan} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingLoanId(null)} className={iconBtnCls}><X size={16} /></button>
                   </div>
@@ -663,6 +699,7 @@ export default function FinancePage() {
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
                     {formatMoney(remaining, l.currency)} remaining · {formatMoney(emi, l.currency)}/mo EMI
+                    {l.accountNumber ? ` · Acct ${l.accountNumber}` : ""}
                   </p>
                 </div>
               );
@@ -682,6 +719,7 @@ export default function FinancePage() {
             <input placeholder="APR %" type="number" value={newLoan.interestRate} onChange={(e) => setNewLoan((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             <input placeholder="Tenure (mo)" type="number" value={newLoan.tenureMonths} onChange={(e) => setNewLoan((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             <input type="date" value={newLoan.startDate} onChange={(e) => setNewLoan((s) => ({ ...s, startDate: e.target.value }))} className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+            <input placeholder="Account # (optional)" value={newLoan.accountNumber} onChange={(e) => setNewLoan((s) => ({ ...s, accountNumber: e.target.value }))} className={inputCls} />
             <button type="button" onClick={addLoan} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -813,6 +851,7 @@ export default function FinancePage() {
                       <Field label="Next date"><input type="date" value={subDraft.nextDate} onChange={(e) => setSubDraft({ ...subDraft, nextDate: e.target.value })} className={selectCls} /></Field>
                     )}
                     <Field label="Tax %"><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
+                    <Field label="Tenure (mo, 0=none)"><input type="number" value={subDraft.tenureMonths} onChange={(e) => setSubDraft({ ...subDraft, tenureMonths: Number(e.target.value) })} className="w-20 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
                     <button type="button" onClick={saveSub} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingSubId(null)} className={iconBtnCls}><X size={16} /></button>
                   </div>
@@ -823,7 +862,10 @@ export default function FinancePage() {
                 <div key={s.id} className="flex items-center justify-between text-sm">
                   <div>
                     <p className="text-gray-200">{s.provider}</p>
-                    <p className="text-xs text-gray-500">{s.cadence} · {ownerName(s.ownerId)} · {formatMoney(monthlySubCost(s), s.currency)}/mo equiv.</p>
+                    <p className="text-xs text-gray-500">
+                      {s.cadence} · {ownerName(s.ownerId)} · {formatMoney(monthlySubCost(s), s.currency)}/mo equiv.
+                      {s.tenureMonths > 0 ? ` · ${s.tenureMonths}mo contract` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
@@ -854,6 +896,7 @@ export default function FinancePage() {
               <input type="date" value={newSub.nextDate} onChange={(e) => setNewSub((s) => ({ ...s, nextDate: e.target.value }))} className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             )}
             <input placeholder="Tax %" type="number" value={newSub.taxPct} onChange={(e) => setNewSub((s) => ({ ...s, taxPct: e.target.value }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+            <input placeholder="Tenure mo (0=none)" type="number" value={newSub.tenureMonths} onChange={(e) => setNewSub((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             <button type="button" onClick={addSub} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
