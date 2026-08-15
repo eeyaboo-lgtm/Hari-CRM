@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import {
   uid,
@@ -106,15 +107,46 @@ export default function FinancePage() {
   const owners = useMemo(() => [...members, SHARED], [members]);
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
 
-  // .v4/.v3: bumped again — Account gained `bankUrl`, CardAcct gained
-  // `accountKind`, Loan gained `accountNumber`, Sub gained `tenureMonths`.
-  // Old data at prior versions is orphaned rather than migrated (still
-  // placeholder data, same convention as the last bump).
-  const [accounts, setAccounts] = useLocalStorage<Account[]>("finance.accounts.v4", DEFAULT_ACCOUNTS);
-  const [cards, setCards] = useLocalStorage<CardAcct[]>("finance.cards.v4", DEFAULT_CARDS);
-  const [cardSpends, setCardSpends] = useLocalStorage<CardSpend[]>("finance.cardSpends.v3", []);
-  const [loans, setLoans] = useLocalStorage<Loan[]>("finance.loans.v3", DEFAULT_LOANS);
-  const [subs, setSubs] = useLocalStorage<Sub[]>("finance.subs.v3", DEFAULT_SUBS);
+  // Accounts/Cards/CardSpends/Loans/Subs are now wired to real Supabase
+  // tables via useSupabaseSynced — same [value, setValue] shape as
+  // useLocalStorage (which is why none of the JSX/handlers below needed to
+  // change), but every setter call also diffs and pushes to the DB, and the
+  // localStorage copy is now just an offline cache, not the source of truth.
+  // Schemes (nested two-table shape) + budget/hideBalances (per-device
+  // prefs) are deliberately left on localStorage this pass — see
+  // HANDOVER.md for the follow-up plan.
+  const [accounts, setAccounts] = useSupabaseSynced<Account>("finance_accounts", "finance.accounts.v4", DEFAULT_ACCOUNTS, {
+    ownerLocalId: (a) => a.ownerId,
+    toRow: (a) => ({ name: a.name, account_type: a.type, currency: a.currency, current_balance: a.balance, bank_url: a.bankUrl || null }),
+    fromRow: (row, ownerId) => ({ id: row.id, ownerId, name: row.name, type: row.account_type, currency: row.currency, balance: Number(row.current_balance) || 0, bankUrl: row.bank_url ?? "" }),
+  });
+  const [cards, setCards] = useSupabaseSynced<CardAcct>("finance_cards", "finance.cards.v4", DEFAULT_CARDS, {
+    ownerLocalId: (c) => c.ownerId,
+    toRow: (c) => ({ name: c.name, network: c.network, account_kind: c.accountKind, last4: c.last4, currency: c.currency, credit_limit: c.creditLimit, limit_used: c.limitUsed, interest_rate: c.interestRate, tenure_months: c.tenureMonths, outstanding: c.outstanding }),
+    fromRow: (row, ownerId) => ({ id: row.id, ownerId, name: row.name, network: row.network, accountKind: row.account_kind, last4: row.last4, currency: row.currency, creditLimit: Number(row.credit_limit) || 0, limitUsed: Number(row.limit_used) || 0, interestRate: Number(row.interest_rate) || 0, tenureMonths: Number(row.tenure_months) || 0, outstanding: Number(row.outstanding) || 0 }),
+  });
+  // Card spends have no per-member owner in the local shape — booked as a
+  // joint ("shared") entry so either household member can edit/delete it.
+  const [cardSpends, setCardSpends] = useSupabaseSynced<CardSpend>("finance_card_spends", "finance.cardSpends.v3", [], {
+    ownerLocalId: () => "shared",
+    toRow: (s) => ({ card_id: s.cardId, label: s.label, amount: s.amount, currency: s.currency, spend_date: s.date }),
+    fromRow: (row) => ({ id: row.id, cardId: row.card_id, label: row.label, amount: Number(row.amount) || 0, currency: row.currency, date: row.spend_date }),
+  });
+  const [loans, setLoans] = useSupabaseSynced<Loan>("finance_loans", "finance.loans.v3", DEFAULT_LOANS, {
+    ownerLocalId: (l) => l.ownerId,
+    toRow: (l) => ({
+      name: l.name, lender: l.lenderType, principal: l.principal, currency: l.currency, interest_rate: l.interestRate,
+      tenure_months: l.tenureMonths, start_date: l.startDate, account_number: l.accountNumber || null,
+      monthly_installment: calcEMI(l.principal, l.interestRate, l.tenureMonths),
+      remaining_balance: calcRemainingBalance(l.principal, l.interestRate, l.tenureMonths, monthsElapsedSince(l.startDate)),
+    }),
+    fromRow: (row, ownerId) => ({ id: row.id, ownerId, name: row.name, lenderType: (row.lender as Loan["lenderType"]) || "bank", currency: row.currency, principal: Number(row.principal) || 0, interestRate: Number(row.interest_rate) || 0, tenureMonths: Number(row.tenure_months) || 0, startDate: row.start_date, accountNumber: row.account_number ?? "" }),
+  });
+  const [subs, setSubs] = useSupabaseSynced<Sub>("finance_subscriptions", "finance.subs.v3", DEFAULT_SUBS, {
+    ownerLocalId: (s) => s.ownerId,
+    toRow: (s) => ({ name: s.provider, amount: s.amount, currency: s.currency, billing_cycle: s.cadence, next_due_date: s.nextDate || todayIso(), billing_day: s.billingDay, tax_pct: s.taxPct, tenure_months: s.tenureMonths, auto_renew: true }),
+    fromRow: (row, ownerId) => ({ id: row.id, ownerId, provider: row.name, currency: row.currency, amount: Number(row.amount) || 0, cadence: (row.billing_cycle as Sub["cadence"]) || "monthly", billingDay: Number(row.billing_day) || 1, nextDate: row.next_due_date ?? "", taxPct: Number(row.tax_pct) || 0, tenureMonths: Number(row.tenure_months) || 0 }),
+  });
   const [schemes, setSchemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", DEFAULT_SCHEMES);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
   const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
@@ -346,8 +378,7 @@ export default function FinancePage() {
           <div>
             <h1 className="text-2xl font-semibold text-white">Finance</h1>
             <p className="mt-1 text-sm text-gray-400">
-              LKR · AED · USD side by side. Saved on this device for now — will move to Supabase once
-              the finance tables are wired up.
+              LKR · AED · USD side by side. Synced live to your household database.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
