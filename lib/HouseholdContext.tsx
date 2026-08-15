@@ -41,11 +41,22 @@ async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Reconciles the locally-cached member list with the real household
 // roster: matches by name (case-insensitive) so an existing member's
 // pinHash carries over onto their real profile uuid, rather than
-// resetting. Anything local that doesn't match a real profile (a custom
-// label someone added) is kept, not silently dropped.
+// resetting.
+//
+// IMPORTANT: this browser's localStorage is shared across whichever
+// account happens to be signed in on it — it is NOT scoped per Supabase
+// session. If this browser was previously used for a *different*
+// household (or admin viewing a different household), stale real-profile
+// entries from that other household must not leak into this one. Only
+// genuine local-only custom labels (ids from addMember, shaped "m-...",
+// never backed by a real profile) are preserved as extras; anything that
+// looks like a real profile uuid but isn't in the CURRENT household's
+// fetched roster is dropped, not carried forward.
 function mergeRealMembers(prevLocal: HouseholdMember[], real: { id: string; name: string }[]): HouseholdMember[] {
   const usedPrevIdx = new Set<number>();
   const merged: HouseholdMember[] = real.map((r) => {
@@ -59,7 +70,9 @@ function mergeRealMembers(prevLocal: HouseholdMember[], real: { id: string; name
     return { id: r.id, name: r.name, initial: r.name.charAt(0).toUpperCase() || "?", pinHash: null };
   });
   prevLocal.forEach((m, i) => {
-    if (!usedPrevIdx.has(i)) merged.push(m);
+    if (usedPrevIdx.has(i)) return;
+    if (UUID_RE.test(m.id)) return; // stale real member from a different household on this browser — drop it
+    merged.push(m);
   });
   return merged;
 }

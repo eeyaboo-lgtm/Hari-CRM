@@ -41,7 +41,7 @@ function MemberSelect({ value, onChange }: { value: string; onChange: (id: strin
       onChange={(e) => onChange(e.target.value)}
       className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
     >
-      {members.map((m) => (
+      {withShared(members).map((m) => (
         <option key={m.id} value={m.id}>
           {m.name}
         </option>
@@ -50,8 +50,21 @@ function MemberSelect({ value, onChange }: { value: string; onChange: (id: strin
   );
 }
 
+// Matches Finance's "Shared" convention: a selectable option, not a real
+// profile, for anything jointly owned by the household rather than one
+// member. Without this, forms could only submit a real member id or "",
+// and unresolveOwner's "shared" fallback (visibility=mirrored_edit) had
+// no matching <option> — the browser then silently rendered whichever
+// member happened to be first in the list instead of the true owner.
+const SHARED = { id: "shared", name: "Household (shared)" };
+
+function withShared(members: { id: string; name: string }[]) {
+  return [...members, SHARED];
+}
+
 function memberName(members: { id: string; name: string }[], id: string) {
-  return members.find((m) => m.id === id)?.name ?? "Household";
+  if (id === "shared") return SHARED.name;
+  return members.find((m) => m.id === id)?.name ?? "Unassigned";
 }
 
 /* ---------------------------------------------------------------------- */
@@ -165,7 +178,7 @@ function AllergyCard({
               onChange={(e) => onUpdate({ ...entry, memberId: e.target.value })}
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
             >
-              {members.map((m) => (
+              {withShared(members).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
@@ -241,19 +254,27 @@ function AllergiesSection() {
     fromRow: (row, ownerId) => ({ id: row.id, memberId: ownerId, trigger: row.trigger_name, status: row.status, reaction: row.reaction ?? "", date: row.entry_date ?? "", notes: row.notes ?? "" }),
   });
 
+  // Draft form for a brand-new entry — nothing is saved to the household
+  // database until "Add allergy" is clicked with a trigger name filled in.
+  // (Previously "Add" immediately inserted a blank row that then lived in
+  // Supabase from the first keystroke, with no clear save moment — that's
+  // what made it feel like entries just piled up with nothing confirming
+  // they'd saved. This now matches how Conditions/Appointments work.)
+  const blankDraft = (): AllergyEntry => ({
+    id: "",
+    memberId: activeMemberId ?? members[0]?.id ?? "shared",
+    trigger: "",
+    status: "suspected",
+    reaction: "",
+    date: "",
+    notes: "",
+  });
+  const [draft, setDraft] = useState<AllergyEntry>(blankDraft());
+
   const addEntry = () => {
-    setEntries((prev) => [
-      {
-        id: uid(),
-        memberId: activeMemberId ?? members[0]?.id ?? "",
-        trigger: "",
-        status: "suspected",
-        reaction: "",
-        date: "",
-        notes: "",
-      },
-      ...prev,
-    ]);
+    if (!draft.trigger.trim()) return;
+    setEntries((prev) => [{ ...draft, id: uid(), trigger: draft.trigger.trim() }, ...prev]);
+    setDraft(blankDraft());
   };
   const updateEntry = (id: string, e: AllergyEntry) => setEntries((prev) => prev.map((x) => (x.id === id ? e : x)));
   const removeEntry = (id: string) => setEntries((prev) => prev.filter((x) => x.id !== id));
@@ -262,23 +283,53 @@ function AllergiesSection() {
 
   return (
     <section className="glass-card rounded-xl2 p-5">
-      <div className="relative z-10 mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-medium text-white">Allergy history</h2>
-          <p className="mt-1 text-sm text-gray-400">
-            Trial-and-error log — what's caused a reaction, what's only suspected, and what's been tested and
-            found safe.
-            {entries.length > 0 ? ` ${confirmedCount} confirmed of ${entries.length} logged.` : ""}
-          </p>
+      <div className="relative z-10 mb-4">
+        <h2 className="font-medium text-white">Allergy history</h2>
+        <p className="mt-1 text-sm text-gray-400">
+          Trial-and-error log — what's caused a reaction, what's only suspected, and what's been tested and
+          found safe.
+          {entries.length > 0 ? ` ${confirmedCount} confirmed of ${entries.length} logged.` : ""}
+        </p>
+      </div>
+
+      <div className="relative z-10 mb-4 rounded-xl2 border border-dashed border-base-border bg-base-card/30 p-4">
+        <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
+            <select
+              value={draft.memberId}
+              onChange={(e) => setDraft({ ...draft, memberId: e.target.value })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {withShared(members).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Trigger / substance</label>
+            <input
+              value={draft.trigger}
+              onChange={(e) => setDraft({ ...draft, trigger: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && addEntry()}
+              placeholder="e.g. Penicillin, peanuts, shellfish"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
         </div>
         <button
           type="button"
           onClick={addEntry}
-          className="flex shrink-0 items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white"
+          disabled={!draft.trigger.trim()}
+          className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white disabled:opacity-40"
         >
           <Plus size={14} /> Add allergy
         </button>
+        <p className="mt-2 text-xs text-gray-600">Saved once you click Add — set status, reaction and notes on the card below afterward.</p>
       </div>
+
       <div className="relative z-10 space-y-3">
         {entries.length === 0 && <p className="text-xs text-gray-500">Nothing logged yet.</p>}
         {entries.map((e) => (
@@ -467,7 +518,7 @@ function InsuranceCard({
               onChange={(e) => onUpdate({ ...policy, memberId: e.target.value })}
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
             >
-              {members.map((m) => (
+              {withShared(members).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>

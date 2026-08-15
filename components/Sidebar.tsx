@@ -70,15 +70,26 @@ export default function Sidebar() {
           </p>
         </div>
 
-        <form action={logout}>
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-red-300"
-          >
-            <LogOut size={18} />
-            Log out
-          </button>
-        </form>
+        <button
+          type="button"
+          onClick={async () => {
+            // This browser's household/profile cache is shared across
+            // whichever account signs in on it — clear it on the way out
+            // so the next person (or the next account you sign into on
+            // this device) never sees a stale roster from this session.
+            try {
+              window.localStorage.removeItem("household.members");
+              window.sessionStorage.removeItem("household.activeMemberId");
+              window.sessionStorage.removeItem("household.unlocked");
+              window.localStorage.removeItem("admin.viewingHouseholdId");
+            } catch {}
+            await logout();
+          }}
+          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm text-gray-400 transition-colors hover:bg-white/5 hover:text-red-300"
+        >
+          <LogOut size={18} />
+          Log out
+        </button>
       </div>
     </aside>
   );
