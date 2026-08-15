@@ -6,11 +6,12 @@
 // store) so edits here and on the Vision page stay in sync.
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
-import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import {
   GOALS_STORAGE_KEY,
   STATUS_META,
   TYPE_META,
+  visionGoalsMapper,
   type LifeGoal,
   type GoalStatus,
 } from "@/components/VisionGoals";
@@ -81,7 +82,7 @@ function SiteGrid({ sites }: { sites: { name: string; url: string }[] }) {
 }
 
 export default function TripDetailPage({ params }: { params: { id: string } }) {
-  const [goals, setGoals] = useLocalStorage<LifeGoal[]>(GOALS_STORAGE_KEY, []);
+  const [goals, setGoals] = useSupabaseSynced<LifeGoal>("vision_goals", GOALS_STORAGE_KEY, [], visionGoalsMapper);
   const goal = goals.find((g) => g.id === params.id);
 
   const update = (patch: Partial<LifeGoal>) => {

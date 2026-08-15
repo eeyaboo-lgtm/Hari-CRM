@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { ExternalLink, Eye, EyeOff, Plus, X } from "lucide-react";
 
 const PROJECTS = [
@@ -111,11 +112,22 @@ function StackRow({ item, onUpdate, onRemove }: { item: StackItem; onUpdate: (v:
 }
 
 export default function BusinessPage() {
-  const [ideas, setIdeas] = useLocalStorage<Idea[]>("business.ideas", []);
+  // Business has no per-member split — both household members jointly own
+  // every idea/stack entry, so ownerLocalId is always "shared" (-> current
+  // user as owner_id, mirrored_edit visibility, either of you can edit).
+  const [ideas, setIdeas] = useSupabaseSynced<Idea>("business_ideas", "business.ideas", [], {
+    ownerLocalId: () => "shared",
+    toRow: (i) => ({ title: i.text, status: i.status }),
+    fromRow: (row) => ({ id: row.id, text: row.title, status: (row.status as Idea["status"]) || "new" }),
+  });
   // Draft persists to localStorage on every keystroke so nothing typed is
   // ever lost, even if the tab closes before "Add" is clicked.
   const [text, setText] = useLocalStorage<string>("business.ideaDraft", "");
-  const [stack, setStack] = useLocalStorage<StackItem[]>("business.stack", []);
+  const [stack, setStack] = useSupabaseSynced<StackItem>("business_stack", "business.stack", [], {
+    ownerLocalId: () => "shared",
+    toRow: (s) => ({ service: s.service, url: s.url || null, email: s.email || null, username: s.username || null }),
+    fromRow: (row) => ({ id: row.id, service: row.service, url: row.url ?? "", email: row.email ?? "", username: row.username ?? "" }),
+  });
   const [presetPick, setPresetPick] = useState(STACK_PRESETS[0].service);
 
   const addIdea = () => {
@@ -149,8 +161,8 @@ export default function BusinessPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Business Projects</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Sites, stores, socials, program stack, and the idea journal — backed by business_projects,
-            business_accounts, business_ideas in schema.sql.
+            Sites, stores, socials, program stack, and the idea journal — idea journal and program stack sync
+            live to your household database.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">

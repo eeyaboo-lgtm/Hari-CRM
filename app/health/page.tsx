@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { Download, ExternalLink, FileUp, Plus, Trash2, X } from "lucide-react";
 
@@ -17,6 +18,7 @@ const ALLERGY_STATUS_META: Record<AllergyStatus, { label: string; color: string 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 type FileDoc = { name: string; mime: string; dataUrl: string };
 
@@ -60,7 +62,17 @@ type Condition = { id: string; memberId: string; text: string; date?: string };
 
 function ConditionsSection() {
   const { members, activeMemberId } = useHousehold();
-  const [entries, setEntries] = useLocalStorage<Condition[]>("health.conditions", []);
+  const [entries, setEntries] = useSupabaseSynced<Condition>(
+    "health_records",
+    "health.conditions",
+    [],
+    {
+      ownerLocalId: (c) => c.memberId,
+      toRow: (c) => ({ title: c.text, record_date: c.date || null }),
+      fromRow: (row, ownerId) => ({ id: row.id, memberId: ownerId, text: row.title, date: row.record_date ?? undefined }),
+    },
+    { record_type: "condition" }
+  );
   const [text, setText] = useState("");
   const [date, setDate] = useState("");
   const [memberId, setMemberId] = useState(activeMemberId ?? members[0]?.id ?? "");
@@ -223,7 +235,11 @@ function AllergyCard({
 
 function AllergiesSection() {
   const { members, activeMemberId } = useHousehold();
-  const [entries, setEntries] = useLocalStorage<AllergyEntry[]>("health.allergies", []);
+  const [entries, setEntries] = useSupabaseSynced<AllergyEntry>("health_allergies", "health.allergies", [], {
+    ownerLocalId: (a) => a.memberId,
+    toRow: (a) => ({ trigger_name: a.trigger, status: a.status, reaction: a.reaction || null, entry_date: a.date || null, notes: a.notes || null }),
+    fromRow: (row, ownerId) => ({ id: row.id, memberId: ownerId, trigger: row.trigger_name, status: row.status, reaction: row.reaction ?? "", date: row.entry_date ?? "", notes: row.notes ?? "" }),
+  });
 
   const addEntry = () => {
     setEntries((prev) => [
@@ -281,7 +297,11 @@ type Appointment = { id: string; memberId: string; text: string; date?: string; 
 
 function AppointmentsSection() {
   const { members, activeMemberId } = useHousehold();
-  const [entries, setEntries] = useLocalStorage<Appointment[]>("health.appointments", []);
+  const [entries, setEntries] = useSupabaseSynced<Appointment>("health_appointments", "health.appointments", [], {
+    ownerLocalId: (a) => a.memberId,
+    toRow: (a) => ({ title: a.text, doctor: a.provider || null, appointment_at: `${a.date || todayIso()}T00:00:00Z` }),
+    fromRow: (row, ownerId) => ({ id: row.id, memberId: ownerId, text: row.title, date: row.appointment_at ? String(row.appointment_at).slice(0, 10) : undefined, provider: row.doctor ?? undefined }),
+  });
   const [text, setText] = useState("");
   const [provider, setProvider] = useState("");
   const [date, setDate] = useState("");
@@ -603,7 +623,8 @@ export default function HealthPage() {
           <h1 className="text-2xl font-semibold text-white">Health &amp; Insurance</h1>
           <p className="mt-1 text-sm text-gray-400">
             Conditions &amp; history, allergies, appointments, and insurance — each entry is tagged to a household
-            member. Will move to Supabase (health_records, health_appointments, health_insurance) once wired up.
+            member. Conditions, allergies and appointments sync live to your household database; insurance
+            (including its file uploads) is still local pending a dedicated table.
           </p>
         </div>
         <ConditionsSection />

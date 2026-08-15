@@ -39,7 +39,15 @@ export function useSupabaseSynced<T extends { id: string }>(
   table: string,
   localStorageKey: string,
   initialValue: T[],
-  mapper: Mapper<T>
+  mapper: Mapper<T>,
+  /**
+   * Extra columns that both filter the select (rows must match these) AND
+   * get merged into every insert/update row. Use this when several UI
+   * sections share one physical table via a discriminator column, e.g.
+   * Health's Conditions and Insurance both live in health_records but are
+   * told apart by record_type — { record_type: "condition" }.
+   */
+  staticFields?: Record<string, unknown>
 ) {
   const [value, setValueState] = useState<T[]>(initialValue);
   const [ready, setReady] = useState(false);
@@ -47,6 +55,8 @@ export function useSupabaseSynced<T extends { id: string }>(
   const supabaseRef = useRef(createClient());
   const mapperRef = useRef(mapper);
   mapperRef.current = mapper;
+  const staticFieldsRef = useRef(staticFields ?? {});
+  staticFieldsRef.current = staticFields ?? {};
 
   useEffect(() => {
     try {
@@ -61,7 +71,9 @@ export function useSupabaseSynced<T extends { id: string }>(
       const supabase = supabaseRef.current;
       try {
         const ownerMap = await getOwnerMap(supabase);
-        const { data, error } = await supabase.from(table).select("*");
+        let query = supabase.from(table).select("*");
+        for (const [k, v] of Object.entries(staticFieldsRef.current)) query = query.eq(k, v as any);
+        const { data, error } = await query;
         if (error) throw error;
         if (cancelled || !data) return;
         const rows = data.map((row: any) =>
@@ -111,7 +123,7 @@ export function useSupabaseSynced<T extends { id: string }>(
       for (const item of next) {
         const prevItem = prevMap.get(item.id);
         const own = ownerMap.resolveOwner(m.ownerLocalId(item));
-        const row = { ...m.toRow(item), owner_id: own.owner_id, visibility: own.visibility };
+        const row = { ...m.toRow(item), ...staticFieldsRef.current, owner_id: own.owner_id, visibility: own.visibility };
         if (!prevItem) {
           const { data, error } = await supabase.from(table).insert(row).select("id").single();
           if (error) {

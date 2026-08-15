@@ -7,7 +7,7 @@
 // pending the Supabase wiring pass (see HANDOVER.md).
 import { useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
-import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { uid, daysUntil, formatDaysUntil, formatMoney } from "@/lib/financeUtils";
 import { Award, ExternalLink, Plus, Trash2 } from "lucide-react";
@@ -241,7 +241,20 @@ export default function MembershipsPage() {
   const owners = useMemo(() => [...members, SHARED], [members]);
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
 
-  const [items, setItems] = useLocalStorage<Membership[]>("memberships.items", []);
+  const [items, setItems] = useSupabaseSynced<Membership>("memberships", "memberships.items", [], {
+    ownerLocalId: (m) => m.ownerId,
+    toRow: (m) => ({
+      category: m.category, name: m.name, provider: m.provider || null, member_number: m.memberNumber || null,
+      fee: m.fee, currency: m.currency, renewal_cadence: m.renewalCadence, renewal_date: m.renewalDate || null,
+      expiry_date: m.expiryDate || null, link: m.link || null, notes: m.notes || null,
+    }),
+    fromRow: (row, ownerId) => ({
+      id: row.id, ownerId, category: row.category, name: row.name, provider: row.provider ?? "",
+      memberNumber: row.member_number ?? "", fee: Number(row.fee) || 0, currency: row.currency,
+      renewalCadence: row.renewal_cadence, renewalDate: row.renewal_date ?? "", expiryDate: row.expiry_date ?? "",
+      link: row.link ?? "", notes: row.notes ?? "",
+    }),
+  });
   const [filter, setFilter] = useState<string>("all");
 
   const addItem = () => {

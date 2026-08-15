@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
+import { useSchemesSynced } from "@/lib/supabase/useSchemesSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import {
   uid,
@@ -147,7 +148,7 @@ export default function FinancePage() {
     toRow: (s) => ({ name: s.provider, amount: s.amount, currency: s.currency, billing_cycle: s.cadence, next_due_date: s.nextDate || todayIso(), billing_day: s.billingDay, tax_pct: s.taxPct, tenure_months: s.tenureMonths, auto_renew: true }),
     fromRow: (row, ownerId) => ({ id: row.id, ownerId, provider: row.name, currency: row.currency, amount: Number(row.amount) || 0, cadence: (row.billing_cycle as Sub["cadence"]) || "monthly", billingDay: Number(row.billing_day) || 1, nextDate: row.next_due_date ?? "", taxPct: Number(row.tax_pct) || 0, tenureMonths: Number(row.tenure_months) || 0 }),
   });
-  const [schemes, setSchemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", DEFAULT_SCHEMES);
+  const [schemes, setSchemes] = useSchemesSynced("finance.schemes.v1", DEFAULT_SCHEMES);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
   const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
 

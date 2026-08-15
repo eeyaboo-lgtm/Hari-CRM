@@ -2,10 +2,9 @@
 
 // Life Goals & Trips — bucket-list/travel tracker, shared by default (same
 // spirit as the mood board above it: either of you can add/edit/remove).
-// localStorage-backed for now, same as every other module pending the
-// Supabase wiring pass (see HANDOVER.md).
+// Synced live to vision_goals via useSupabaseSynced.
 import Link from "next/link";
-import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { Plane, Sparkle, Target, Plus, Trash2, ExternalLink, MapPin } from "lucide-react";
 
 export function uid() {
@@ -168,8 +167,27 @@ function GoalCard({ goal, onUpdate, onRemove }: { goal: LifeGoal; onUpdate: (g: 
   );
 }
 
+// Exported so the /vision/trip/[id] sub-page can read/write the exact same
+// Supabase-backed array (single source of truth, no separate store).
+export const visionGoalsMapper = {
+  ownerLocalId: () => "shared",
+  toRow: (g: LifeGoal) => ({
+    goal_type: g.type, title: g.title, target: g.target || null, notes: g.notes || null, status: g.status,
+    ticket_price: g.ticketPrice || null, link: g.link || null, travelers: g.travelers ?? null,
+    one_way_per_person: g.oneWayPerPerson ?? null, round_trip_per_person: g.roundTripPerPerson ?? null,
+    currency: g.currency ?? null,
+  }),
+  fromRow: (row: any): LifeGoal => ({
+    id: row.id, type: row.goal_type, title: row.title, target: row.target ?? "", notes: row.notes ?? "",
+    status: row.status, ticketPrice: row.ticket_price ?? "", link: row.link ?? "",
+    travelers: row.travelers ?? undefined, oneWayPerPerson: row.one_way_per_person != null ? Number(row.one_way_per_person) : undefined,
+    roundTripPerPerson: row.round_trip_per_person != null ? Number(row.round_trip_per_person) : undefined,
+    currency: row.currency ?? undefined,
+  }),
+};
+
 export default function VisionGoals() {
-  const [goals, setGoals] = useLocalStorage<LifeGoal[]>(GOALS_STORAGE_KEY, []);
+  const [goals, setGoals] = useSupabaseSynced<LifeGoal>("vision_goals", GOALS_STORAGE_KEY, [], visionGoalsMapper);
 
   const addGoal = (type: GoalType) => {
     setGoals((prev) => [
