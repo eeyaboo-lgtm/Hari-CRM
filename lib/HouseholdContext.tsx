@@ -20,7 +20,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
+import { getAdminViewingHouseholdId, clearOwnerMapCache } from "@/lib/supabase/ownerMap";
 
 export type HouseholdMember = {
   id: string;
@@ -158,6 +158,65 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
       // storage unavailable — fall back to defaults, gate still works in-memory
     }
     loadRealHousehold().finally(() => setReady(true));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch whenever the signed-in Supabase user actually changes.
+  //
+  // The bug this fixes: logging out and back in as a different account
+  // (e.g. Shenaal -> admin, or Shenaal -> Shannon on the same browser)
+  // happens via a server-action redirect, which Next.js handles as a
+  // client-side navigation — the root layout, and therefore this
+  // provider, never remounts. The mount-only effect above ran once for
+  // the FIRST session of the page load and never again, so every field
+  // computed from "who am I" (isAdmin, householdId, householdName,
+  // members, needsPinSetup) kept showing the previous account's values
+  // even though the browser was now authenticated as someone else —
+  // e.g. admin's Settings page silently rendering as if signed in as
+  // Shenaal, with none of the admin-only sections appearing.
+  //
+  // ownerMap.ts's module-level cache has the same "who am I" staleness
+  // problem for a different reason (its cache key doesn't vary by
+  // signed-in user), so it's cleared here too on every real account
+  // switch, not just here.
+  useEffect(() => {
+    const supabase = createClient();
+    let lastUid: string | null | undefined = undefined; // undefined = not yet seen
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const uid = session?.user?.id ?? null;
+      if (lastUid === undefined) {
+        // First callback (Supabase's own INITIAL_SESSION) just tells us
+        // who's already signed in — the mount effect above is already
+        // fetching for them, so record and skip to avoid a duplicate
+        // fetch.
+        lastUid = uid;
+        return;
+      }
+      if (uid === lastUid) return; // token refresh etc. — same user, nothing to do
+      lastUid = uid;
+      clearOwnerMapCache();
+      // Session-scoped local picks belong to the PREVIOUS account —
+      // don't let them carry over into the new one.
+      setActiveMemberId(null);
+      setUnlocked(false);
+      try {
+        window.sessionStorage.removeItem(ACTIVE_KEY);
+        window.sessionStorage.removeItem(UNLOCKED_KEY);
+      } catch {}
+      if (!uid) {
+        // Signed out — clear everything derived from "who am I" rather
+        // than waiting for a sign-in that may not come right away.
+        setIsAdmin(false);
+        setHouseholdId(null);
+        setHouseholdName(null);
+        setNeedsPinSetup(false);
+        return;
+      }
+      loadRealHousehold();
+    });
+    return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
