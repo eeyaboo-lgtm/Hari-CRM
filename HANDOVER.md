@@ -1,4 +1,246 @@
-# Hari-CRM — Session Handover (2026-08-15, latest #6 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-16, latest #11 — READ THIS FIRST)
+
+## Status: App confirmed ready for real data. 2 more real bugs found + fixed + deployed live.
+User asked point-blank: is everything saved to Supabase, can they start entering real
+finances etc.? **Yes** — Finance, Health (conditions/allergies/appointments), Business,
+Memberships, Vision goals/trips are all live on Supabase. Only Health Insurance (no table
+yet) and Vision board photos (still localStorage data-URLs) are local-only, by design, not
+a bug.
+
+Did the 3 requested follow-ups from #10, in order:
+
+1. **NSAID orphan allergy row (item 3)** — DB writes to `health_allergies` got blocked
+   by the safety classifier (same intermittent block as the earlier password-reset issue).
+   Left the row in place with a note flagging it as an orphan test row — **user should
+   delete/reassign it via Health → Allergies UI directly**, didn't force it via more SQL attempts.
+2. **Natasha & Arun's one-time password (item 2)** — done via the admin panel's "reset a
+   household's login" (the proper Admin-API path, not raw SQL). Confirmed via
+   `auth.users.updated_at`. **Told the user the temp PIN in chat — not saved to any file.**
+3. **PinSetupGate end-to-end verification (item 1)** — while testing this, found and fixed
+   two real bugs:
+   - **PIN gate briefly showed the previous account's dashboard.** Root cause: logging in
+     is a server-action `redirect()`, a soft client nav, so `HouseholdContext` never
+     remounts. The #10 fix's `onAuthStateChange` listener does refetch who's-signed-in
+     correctly, but `ready` stayed `true` the whole time, so `ProfileGate` rendered
+     stale/previous-account content for the ~1-2s the refetch took — a real privacy leak on
+     a shared device. Fix: drop `ready` back to `false` during the refetch, same pattern as
+     the initial mount effect. Pushed `92022b4`.
+   - **No way to log out from any of the 3 full-screen auth gates** (PinSetupGate, the
+     "Who's using" picker, the PIN-entry pad) — hard blocks, no back button, no logout.
+     User caught this live via screenshot. Added a "Log out" link to all three (same
+     storage-clear + `logout()` pattern Sidebar already used). Pushed `a762f75`.
+   Both build-verified 0 errors, both deployed live (`dep-da0s16p5efls73diskj0`,
+   `dep-da0s4i8ae00c73fu6a50`, confirmed `status:"live"`), both re-verified end-to-end in
+   Chrome after deploy (fresh hard-reload login → picker → PIN → dashboard, logout link
+   visible and working on all 3 gates).
+
+**New backlog from this session, not yet started — user flagged all of these live while
+testing, next session should tackle in this order:**
+
+1. **"Card" pattern needed across every module, not just Allergies/Memberships**: right now
+   several add-forms (Membership add, Allergy history, likely others) stay as a big open
+   editable form filling the screen even after saving — user wants it to collapse into a
+   compact card after save, with a clear edit affordance, and explicitly: **"ALL cards in
+   any topic should be editable."** Needs an audit of every module (Health, Finance,
+   Business, Memberships, Vision) for which entities currently lack this collapse-to-card +
+   edit pattern, then one consistent fix applied everywhere. Biggest item on the list.
+2. **Finance individual-tabs report needs re-checking with the user.** User said Finance
+   only showed "Household" + "Shared" tabs, not per-person Shenaal/Shalini tabs. When
+   checked live as Shenaal this session, all 4 tabs (Household/Shenaal/Shalini/Shared) DID
+   render correctly — so either it was a different account/household (e.g. a single-member
+   household like Natasha & Arun or Shannon genuinely has no second person to split by,
+   which would be correct behavior, not a bug), a stale cached bundle on their device, or
+   something else. Ask user which household/device they saw this on before assuming a bug.
+3. **Vision board needs individual + shared boards per person**, not just one shared board —
+   user wants each profile to feel ownership of their own board. Currently `VisionBoard.tsx`
+   is a single flat mood-board, no per-member split at all. Real feature work, ties into the
+   already-known "still localStorage, needs Supabase storage wiring" item.
+4. **Vision board image uploads should be compressed/converted to WebP** before storage, to
+   keep the eventual Supabase `board-images` bucket (and localStorage in the meantime) from
+   bloating — do this as part of the Supabase image-wiring work, not bolted on after.
+
+---
+
+
+## Status: Admin UI was invisible after switching accounts in-tab — FIXED
+User signed in as Shenaal then admin (same tab) and Settings showed none
+of the admin-only sections. DB/RLS were fine (verified via REST with a
+real admin JWT) — it was `HouseholdContext.tsx` only ever fetching
+isAdmin/householdId/members once on mount, and account switches via
+`redirect()` being a client-side nav that never remounts the layout. Now
+subscribes to `supabase.auth.onAuthStateChange` and re-fetches (+ clears
+`ownerMap.ts`'s cache) on any real account change. Pushed `fbded2c`,
+deployed live. **Ask the user to hard-refresh once** to pick up the new
+bundle before re-testing — should self-correct from here on without
+needing a refresh on future account switches.
+
+This is the 3rd instance this session of "stale per-browser client state
+surviving an account switch" (member-picker leak, then ownerMap's
+`"shared"` fallback, now this). If another "shows the wrong account's
+data" report comes in, check for this pattern first.
+
+---
+
+
+
+## Status: Multi-household live, 2 real bugs found by hand-testing + fixed
+User clicked through the app for real and found what code review/REST
+checks missed. Both fixed, build-verified, pushed `807bc0d`, deployed
+live (`dep-da0bu1u7bikc73bsvil0`). Full writeup in memory
+(`project_hari_crm.md` entry #9) — short version:
+
+1. **Member picker leaked across households** (Shannon showing up while
+   signed in as Shenaal) — `localStorage` is shared per-browser across
+   whichever account is signed in; `HouseholdContext.tsx`'s merge logic
+   now drops stale real-profile ids not in the current fetch instead of
+   keeping them. Logout also now clears the relevant storage keys.
+2. **Health → Allergies mis-attributed entries + felt like no "save"** —
+   Health's member dropdowns were missing the "Shared" option that
+   Finance already had, so `ownerMap.ts`'s `"shared"` fallback had
+   nothing to match and the browser silently showed whichever member was
+   first in the list. Added `withShared()` to all 3 Health dropdowns;
+   Allergies "Add" now requires a trigger name before it saves anything
+   (previously inserted a blank row into Supabase immediately on click).
+
+**One cleanup item left over**: a stray test row in `health_allergies`
+("NSAIDs", from admin testing before a household was selected) now shows
+as "Household (shared)" but isn't really anyone's — reassign or delete it
+next time you're in Health → Allergies.
+
+**Logins:**
+- Shenaal: `hilaryuae@gmail.com` (unchanged)
+- Shalini: `shalunayanthara@gmail.com` (unchanged)
+- Shannon: `shannondekretser@gmail.com` / `492443` — own household, works now
+- Natasha & Arun: `eskondido@hari-crm.app` — **still needs a one-time temp
+  password set before first use** (unresolved from session #8 — sign in
+  as admin, Settings → "Admin — reset a household's login", set a temp
+  password with "force PIN setup" checked, hand it to them).
+- Admin: `admin@hari-crm.app` / `277469` — email was corrected from
+  `admin@hari` this session (no-TLD address passed the backend but failed
+  the app's own login-form validation). No household of its own,
+  sees/edits everything via the Settings household switcher.
+
+**Still not done:** full in-browser click-through of PinSetupGate and the
+admin account-recovery panel specifically (the two bugs above were found
+via the *existing* pages, not these newer ones — they haven't been
+exercised by a real human yet). Do this next, now that member-picker
+integrity is fixed — testing those flows earlier might have been
+confused by the leak bug.
+
+**If you touch RLS again:** every content table's policies now go through
+`install_household_rls()` (household-scoped + `is_admin()` bypass) —
+don't hand-write a new one-off policy, extend that procedure instead so
+it stays consistent everywhere.
+
+**If you touch any other page's member dropdown:** check it includes the
+`SHARED`/`"shared"` option (Finance's pattern, now also in Health) —
+`ownerMap.unresolveOwner()` can return `"shared"` for any table, and a
+dropdown missing that option will silently mis-render, exactly like the
+Allergies bug above. Business and Memberships haven't been audited for
+this yet.
+
+---
+
+
+
+## Status: Supabase data-wiring pass DONE (except Insurance + VisionBoard, both explicitly scoped out)
+This was the "only work left project-wide" pass. Pushed as two commits
+(`0a8ddec` Finance, `a1f9687` Health/Business/Memberships/Vision goals +
+Payment schemes), both deployed live on Render (`dep-da0aud8ae00c73fj43vg`,
+`dep-da0b0f8ae00c73fj61ag` — both status `live`), both build-verified clean
+(0 errors, all 12 routes) before pushing. Confirmed the live URL serves
+correctly post-deploy (`/finance` redirects to `/login` as expected, no
+500/blank page). **Full in-browser data-persistence verification (sign in,
+add a record, refresh, confirm it reloads from Supabase) was NOT done this
+session** — the Claude-in-Chrome extension wasn't connected. Do this first
+thing next session: sign in, add one item in each module, hard refresh,
+confirm it's still there (that's the real test, not just that the UI
+updates optimistically).
+
+Every module except two is now live-synced: Finance (accounts, cards, card
+spends, loans, subscriptions, payment schemes), Health (conditions,
+allergies, appointments), Business (idea journal, program stack),
+Memberships, Vision goals/trips. Deliberately still local, both disclosed
+rather than hacked in:
+- **Health Insurance** — needs its own proper table (current `health_records`
+  is too generic for policyholder/copays/allowances/coverage-notes) plus
+  wiring the 4 file uploads to the `health-documents` storage bucket
+  (currently data-URLs in localStorage). Worth its own focused session.
+- **VisionBoard** (mood-board photos/sticky notes) — same story, needs
+  real image uploads to `board-images` plus x/y/w/h/z position sync, not
+  flat-row CRUD. Long-standing known limitation, unchanged this session.
+- **Finance budget + hideBalances** — deliberately local, per-device UI
+  prefs, not shared data. Not a gap.
+
+### Schema migration applied this session (`add_finance_field_gaps_and_new_modules`)
+- `finance_accounts` gained `bank_url text`
+- `finance_loans` gained `account_number text`
+- `finance_subscriptions` gained `billing_day int`, `tax_pct numeric`, `tenure_months int`
+- New tables (all via `install_household_rls()`, RLS confirmed clean by
+  `get_advisors`): `memberships`, `vision_goals`, `business_stack`,
+  `health_allergies`. Exact columns are in `schema.sql`'s live counterpart —
+  check `list_tables` on project `pfchzkcteymiigsdokeo`, not the `schema.sql`
+  file (it's now behind the live DB by these 4 tables + these columns —
+  worth a follow-up commit to sync `schema.sql` itself, low priority).
+
+### New reusable infra (`lib/supabase/`)
+- **`ownerMap.ts`** — resolves the local `HouseholdContext` ownerId
+  (`"shenaal"|"shalini"|"shared"`) to a real `{owner_id, visibility}` pair
+  and back. This was the locked design from earlier sessions, now actually
+  implemented. Cached per page load; call `clearOwnerMapCache()` after
+  sign-out if multi-account switching ever becomes a thing.
+- **`useSupabaseSynced.ts`** — drop-in replacement for `useLocalStorage<T[]>`
+  with the exact same `[value, setValue]` signature. This is why Finance's
+  JSX/handlers needed **zero changes** — only the hook-declaration lines
+  did. Give it a table name, a localStorage cache key, an initial value,
+  and a `{toRow, fromRow, ownerLocalId}` mapper; it diffs on every
+  `setValue` call and pushes insert/update/delete to Supabase, reconciling
+  locally-generated temp ids with the real DB-generated uuid afterward.
+  **Use this same hook for Health/Business/Vision/Memberships** — don't
+  reinvent it.
+
+### Finance — what's wired vs. deliberately deferred
+Wired via `useSupabaseSynced`: `accounts` → `finance_accounts`, `cards` →
+`finance_cards`, `cardSpends` → `finance_card_spends`, `loans` →
+`finance_loans`, `subs` → `finance_subscriptions`. See the mapper functions
+inline in `app/finance/page.tsx`'s hook-declaration block for the exact
+column mapping (note: `Loan.lenderType` is stored in the `lender` text
+column since the schema never got a proper lender-name field — repurposed
+rather than migrated again, flagged in a code comment).
+
+**Deliberately still localStorage-only**, disclosed rather than rushed:
+- `schemes` (Payment schemes) — nested two-table shape
+  (`finance_payment_schemes` + `finance_payment_scheme_items`), doesn't fit
+  the generic flat-array hook. Needs a bespoke sync effect. Do this next —
+  it's the last Finance gap.
+- `budget` (monthly budget number) and `hideBalances` (blur toggle) — pure
+  per-device UI preferences, no schema column exists or is needed for
+  these; leaving on localStorage is a deliberate choice, not a gap.
+
+**Known minor edge case** (documented in `useSupabaseSynced.ts`'s header
+comment): if you reference a just-added row's id before its insert
+round-trip completes (e.g. logging a card spend the instant after adding
+the card), the reference may briefly point at the temp id instead of the
+real one. Not an issue at normal human interaction speed; not solved,
+just disclosed.
+
+### Next session, in this order
+1. **In-browser verification** (see above — this is the actual next step,
+   nothing was verified end-to-end this session beyond a clean build + a
+   healthy deploy response).
+2. **Health Insurance**: design a proper table (or extend health_records
+   with the missing columns — policyholder_name, renewal_date, copays,
+   allowances, coverage_notes — plus 4 file_path-style columns) and wire
+   the `health-documents` bucket for the 4 uploads.
+3. **VisionBoard**: image upload to `board-images` bucket + position sync.
+   Bigger, more isolated piece of work — good standalone session.
+4. Nice-to-have cleanup once the above are done: bump `schema.sql` to match
+   the live DB (4 tables + several columns were added this session via
+   `apply_migration` directly, not reflected in the file), and re-tightening
+   RLS/CSP polish items already flagged in earlier HANDOVER entries.
+
+---
+
 
 ## Status: the entire 2026-08-14 6-part feature request is DONE
 User's original 6-part request (household PIN split, Health sections,
