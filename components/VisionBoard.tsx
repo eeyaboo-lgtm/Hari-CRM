@@ -1,12 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { Image as ImageIcon, StickyNote, Trash2, X, GripVertical } from "lucide-react";
 import { useLocalStorage } from "@/lib/useLocalStorage";
+import { useHousehold } from "@/lib/HouseholdContext";
 
+// Per-person boards (2026-08-16): each household member gets their own
+// mood board, plus one "Shared" board everyone contributes to. Existing
+// single-board installs migrate forward automatically -- any item with no
+// boardId is treated as "shared" the first time this loads, and gets
+// stamped with boardId: "shared" so the migration only ever runs once.
 type BoardItem = {
   id: string;
+  boardId: string; // real profile uuid, or "shared"
   type: "photo" | "note";
   x: number;
   y: number;
@@ -17,17 +24,92 @@ type BoardItem = {
   text?: string;
 };
 
+const SHARED_BOARD = { id: "shared", name: "Shared" };
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Downscales (max 1600px on the long edge) and re-encodes to WebP before
+// the photo ever touches storage -- mood-board photos were previously
+// stored as full-resolution data URLs, which is what made the ~5-10MB
+// localStorage cap bite so fast. Falls back to the original file's data
+// URL if canvas/WebP isn't available (very old browsers) rather than
+// failing the upload outright.
+const MAX_DIMENSION = 1600;
+const WEBP_QUALITY = 0.82;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressToWebp(file: File): Promise<string> {
+  const original = await readFileAsDataUrl(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new window.Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = original;
+    });
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return original;
+    ctx.drawImage(img, 0, 0, w, h);
+    const webp = canvas.toDataURL("image/webp", WEBP_QUALITY);
+    // Some browsers silently fall back to PNG from toDataURL("image/webp",...)
+    // if WebP encoding isn't supported -- only use the result if it's
+    // actually WebP, otherwise keep the untouched original.
+    return webp.startsWith("data:image/webp") ? webp : original;
+  } catch {
+    return original;
+  }
+}
+
 export default function VisionBoard() {
-  const [items, setItems] = useLocalStorage<BoardItem[]>("visionBoardItems", []);
+  const { members } = useHousehold();
+  const boards = useMemo(() => [...members, SHARED_BOARD], [members]);
+
+  const [rawItems, setItems] = useLocalStorage<BoardItem[]>("visionBoardItems", []);
+  // One-time migration: any pre-existing item with no boardId belonged to
+  // the old single flat board -- treat it as "shared" going forward.
+  const items = useMemo<BoardItem[]>(
+    () => rawItems.map((it) => ({ ...it, boardId: it.boardId ?? "shared" })),
+    [rawItems]
+  );
+  useEffect(() => {
+    if (rawItems.some((it) => !it.boardId)) {
+      setItems((prev) => prev.map((it) => ({ ...it, boardId: it.boardId ?? "shared" })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [activeBoard, setActiveBoard] = useState<string>("shared");
+  useEffect(() => {
+    // If the previously-active board (e.g. a member removed from the
+    // household) no longer exists, fall back to Shared rather than
+    // silently showing an empty board with no way to tell why.
+    if (!boards.some((b) => b.id === activeBoard)) setActiveBoard("shared");
+  }, [boards, activeBoard]);
+
+  const boardItems = useMemo(() => items.filter((it) => it.boardId === activeBoard), [items, activeBoard]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null);
   const resizeRef = useRef<{ id: string; startW: number; startH: number; startX: number; startY: number } | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const bringToFront = useCallback(
     (id: string) => {
@@ -111,13 +193,14 @@ export default function VisionBoard() {
   const addItem = (partial: { type: "photo" | "note"; src?: string }) => {
     const id = uid();
     setItems((prev) => {
+      const countOnBoard = prev.filter((it) => it.boardId === activeBoard).length;
       const maxZ = prev.reduce((m, it) => Math.max(m, it.z), 0);
-      const count = prev.length;
       const base: BoardItem = {
         id,
+        boardId: activeBoard,
         type: partial.type,
-        x: 24 + (count % 4) * 40,
-        y: 24 + (count % 4) * 30,
+        x: 24 + (countOnBoard % 4) * 40,
+        y: 24 + (countOnBoard % 4) * 30,
         w: partial.type === "photo" ? 180 : 190,
         h: partial.type === "photo" ? 180 : 150,
         z: maxZ + 1,
@@ -129,14 +212,19 @@ export default function VisionBoard() {
     setSelectedId(id);
   };
 
-  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => addItem({ type: "photo", src: reader.result as string });
-      reader.readAsDataURL(file);
-    });
     e.target.value = "";
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const src = await compressToWebp(file);
+        addItem({ type: "photo", src });
+      }
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeItem = (id: string) => {
@@ -145,24 +233,44 @@ export default function VisionBoard() {
   };
 
   const clearBoard = () => {
-    if (items.length === 0) return;
-    if (window.confirm("Clear the whole board? This can't be undone.")) {
-      setItems([]);
+    if (boardItems.length === 0) return;
+    const boardName = boards.find((b) => b.id === activeBoard)?.name ?? "this";
+    if (window.confirm(`Clear ${boardName}'s board? This can't be undone.`)) {
+      setItems((prev) => prev.filter((it) => it.boardId !== activeBoard));
       setSelectedId(null);
     }
   };
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {boards.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => {
+              setActiveBoard(b.id);
+              setSelectedId(null);
+            }}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeBoard === b.id ? "bg-accent-purple text-white" : "glass-card text-gray-400 hover:text-white"
+            }`}
+          >
+            {b.name}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={handleFiles} />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="glossy-gradient rounded-full bg-gradient-to-br from-accent-pink to-rose-400 px-4 py-2 text-sm font-medium text-white shadow-glow-pink"
+          disabled={uploading}
+          className="glossy-gradient rounded-full bg-gradient-to-br from-accent-pink to-rose-400 px-4 py-2 text-sm font-medium text-white shadow-glow-pink disabled:opacity-60"
         >
           <span className="relative z-10 flex items-center gap-2">
-            <ImageIcon size={16} /> Add photo
+            <ImageIcon size={16} /> {uploading ? "Adding..." : "Add photo"}
           </span>
         </button>
         <button
@@ -180,7 +288,7 @@ export default function VisionBoard() {
           className="glass-card ml-auto rounded-full px-4 py-2 text-sm text-gray-400 hover:text-white"
         >
           <span className="relative z-10 flex items-center gap-2">
-            <Trash2 size={14} /> Clear board
+            <Trash2 size={14} /> Clear this board
           </span>
         </button>
       </div>
@@ -194,13 +302,13 @@ export default function VisionBoard() {
           backgroundSize: "22px 22px",
         }}
       >
-        {items.length === 0 && (
+        {boardItems.length === 0 && (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-gray-500">
             Empty board — add a photo or note to get started.
           </p>
         )}
 
-        {items.map((item) => {
+        {boardItems.map((item) => {
           const isSelected = selectedId === item.id;
           return (
             <div
@@ -263,8 +371,9 @@ export default function VisionBoard() {
       </div>
 
       <p className="text-xs text-gray-500">
-        Saved to this browser for now ({items.length} item{items.length === 1 ? "" : "s"}) — will sync to shared
-        cloud storage once the board-images bucket is wired up.
+        Saved to this browser for now ({boardItems.length} item{boardItems.length === 1 ? "" : "s"} on this board,{" "}
+        {items.length} total) — photos are compressed to WebP before storage. Will sync to shared cloud storage
+        once the board-images bucket is wired up.
       </p>
     </div>
   );

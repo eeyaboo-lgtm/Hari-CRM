@@ -10,8 +10,9 @@ export default function VisionPage() {
         <div>
           <h1 className="text-2xl font-semibold text-white">Vision & Mood Board</h1>
           <p className="mt-1 text-sm text-gray-400">
-            Shared by default — either of you can add, move, resize, or delete. Drag the grip handle at the top of
-            a card to move it, drag the corner handle to resize, click the × to delete.
+            Each person gets their own board, plus a Shared one everyone contributes to — switch boards with the
+            tabs above the mood board. Drag the grip handle at the top of a card to move it, drag the corner
+            handle to resize, click the × to delete.
           </p>
         </div>
         <VisionGoals />

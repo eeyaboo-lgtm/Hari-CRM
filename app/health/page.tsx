@@ -5,7 +5,7 @@ import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
-import { Download, ExternalLink, FileUp, Plus, Trash2, X } from "lucide-react";
+import { Check, Download, ExternalLink, FileUp, Pencil, Plus, Trash2, X } from "lucide-react";
 
 type AllergyStatus = "confirmed" | "suspected" | "safe";
 
@@ -73,6 +73,65 @@ function memberName(members: { id: string; name: string }[], id: string) {
 
 type Condition = { id: string; memberId: string; text: string; date?: string };
 
+function ConditionRow({
+  entry,
+  members,
+  onUpdate,
+  onRemove,
+}: {
+  entry: Condition;
+  members: { id: string; name: string }[];
+  onUpdate: (c: Condition) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
+        <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+        <input
+          value={entry.text}
+          onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
+          className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <input
+          type="date"
+          value={entry.date ?? ""}
+          onChange={(e) => onUpdate({ ...entry, date: e.target.value || undefined })}
+          className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+          <Check size={16} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
+      <div>
+        <p className="text-gray-200">{entry.text}</p>
+        <p className="text-xs text-gray-500">
+          {memberName(members, entry.memberId)}
+          {entry.date ? ` · ${entry.date}` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+          <Pencil size={13} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-white" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ConditionsSection() {
   const { members, activeMemberId } = useHousehold();
   const [entries, setEntries] = useSupabaseSynced<Condition>(
@@ -123,18 +182,7 @@ function ConditionsSection() {
       <div className="relative z-10 space-y-2">
         {entries.length === 0 && <p className="text-xs text-gray-500">Nothing logged yet.</p>}
         {entries.map((e) => (
-          <div key={e.id} className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
-            <div>
-              <p className="text-gray-200">{e.text}</p>
-              <p className="text-xs text-gray-500">
-                {memberName(members, e.memberId)}
-                {e.date ? ` · ${e.date}` : ""}
-              </p>
-            </div>
-            <button type="button" onClick={() => remove(e.id)} className="text-gray-500 hover:text-white">
-              <X size={14} />
-            </button>
-          </div>
+          <ConditionRow key={e.id} entry={e} members={members} onUpdate={(v) => setEntries((prev) => prev.map((x) => (x.id === e.id ? v : x)))} onRemove={() => remove(e.id)} />
         ))}
       </div>
     </section>
@@ -166,9 +214,39 @@ function AllergyCard({
 }) {
   const { members } = useHousehold();
   const meta = ALLERGY_STATUS_META[entry.status];
+  // See the matching comment on MembershipCard: collapses to a compact
+  // summary card once it has a trigger name; fields auto-save on every
+  // keystroke already, so "Done" just collapses the card.
+  const [editing, setEditing] = useState(!entry.trigger);
+
+  if (!editing) {
+    return (
+      <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-white">{entry.trigger || "Untitled allergy"}</p>
+            <p className="text-xs text-gray-500">
+              {withShared(members).find((m) => m.id === entry.memberId)?.name ?? entry.memberId}
+              {entry.date ? ` · ${entry.date}` : ""}
+              {entry.reaction ? ` · ${entry.reaction}` : ""}
+            </p>
+            <span className={`relative z-10 mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs ${meta.color}`}>{meta.label}</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+    <div className="rounded-xl2 border border-accent-purple/40 bg-base-card/40 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
@@ -218,9 +296,14 @@ function AllergyCard({
             />
           </div>
         </div>
-        <button type="button" onClick={onRemove} className="shrink-0 text-gray-500 hover:text-red-400" title="Remove">
-          <Trash2 size={16} />
-        </button>
+        <div className="mt-1 flex shrink-0 flex-col items-center gap-2">
+          <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+            <Check size={16} />
+          </button>
+          <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <div className="mb-3">
         <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
@@ -346,6 +429,72 @@ function AllergiesSection() {
 
 type Appointment = { id: string; memberId: string; text: string; date?: string; provider?: string };
 
+function AppointmentRow({
+  entry,
+  members,
+  onUpdate,
+  onRemove,
+}: {
+  entry: Appointment;
+  members: { id: string; name: string }[];
+  onUpdate: (a: Appointment) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
+        <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+        <input
+          value={entry.text}
+          onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
+          className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <input
+          value={entry.provider ?? ""}
+          onChange={(e) => onUpdate({ ...entry, provider: e.target.value || undefined })}
+          placeholder="Clinic/doctor"
+          className="w-36 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <input
+          type="date"
+          value={entry.date ?? ""}
+          onChange={(e) => onUpdate({ ...entry, date: e.target.value || undefined })}
+          className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+          <Check size={16} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
+      <div>
+        <p className="text-gray-200">{entry.text}</p>
+        <p className="text-xs text-gray-500">
+          {memberName(members, entry.memberId)}
+          {entry.provider ? ` · ${entry.provider}` : ""}
+          {entry.date ? ` · ${entry.date}` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+          <Pencil size={13} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-white" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppointmentsSection() {
   const { members, activeMemberId } = useHousehold();
   const [entries, setEntries] = useSupabaseSynced<Appointment>("health_appointments", "health.appointments", [], {
@@ -403,19 +552,7 @@ function AppointmentsSection() {
       <div className="relative z-10 space-y-2">
         {sorted.length === 0 && <p className="text-xs text-gray-500">No appointments logged yet.</p>}
         {sorted.map((e) => (
-          <div key={e.id} className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
-            <div>
-              <p className="text-gray-200">{e.text}</p>
-              <p className="text-xs text-gray-500">
-                {memberName(members, e.memberId)}
-                {e.provider ? ` · ${e.provider}` : ""}
-                {e.date ? ` · ${e.date}` : ""}
-              </p>
-            </div>
-            <button type="button" onClick={() => remove(e.id)} className="text-gray-500 hover:text-white">
-              <X size={14} />
-            </button>
-          </div>
+          <AppointmentRow key={e.id} entry={e} members={members} onUpdate={(v) => setEntries((prev) => prev.map((x) => (x.id === e.id ? v : x)))} onRemove={() => remove(e.id)} />
         ))}
       </div>
     </section>
@@ -501,14 +638,47 @@ function InsuranceCard({
   onRemove: () => void;
 }) {
   const { members } = useHousehold();
+  // See the matching comment on MembershipCard: collapses once a provider
+  // is set; fields auto-save on every keystroke, "Done" just collapses it.
+  const [editing, setEditing] = useState(!policy.provider);
 
   const uploadTo = async (field: keyof InsurancePolicy, file: File) => {
     const doc = await readFileAsDataUrl(file);
     onUpdate({ ...policy, [field]: doc });
   };
 
+  if (!editing) {
+    const fileCount = [policy.cardFront, policy.cardBack, policy.networkFile, policy.benefitsFile].filter(Boolean).length;
+    return (
+      <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-white">{policy.provider || "Untitled policy"}</p>
+            <p className="text-xs text-gray-500">
+              {withShared(members).find((m) => m.id === policy.memberId)?.name ?? policy.memberId}
+              {policy.policyholderName ? ` · ${policy.policyholderName}` : ""}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {policy.expiryDate && <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">Expires {policy.expiryDate}</span>}
+              {policy.renewalDate && <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">Renews {policy.renewalDate}</span>}
+              {fileCount > 0 && <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">{fileCount} file{fileCount === 1 ? "" : "s"}</span>}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove policy">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+    <div className="rounded-xl2 border border-accent-purple/40 bg-base-card/40 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
@@ -564,9 +734,14 @@ function InsuranceCard({
             </div>
           </div>
         </div>
-        <button type="button" onClick={onRemove} className="shrink-0 text-gray-500 hover:text-red-400" title="Remove policy">
-          <Trash2 size={16} />
-        </button>
+        <div className="mt-1 flex shrink-0 flex-col items-center gap-2">
+          <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+            <Check size={16} />
+          </button>
+          <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove policy">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">

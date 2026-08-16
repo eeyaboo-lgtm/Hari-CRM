@@ -3,9 +3,10 @@
 // Life Goals & Trips — bucket-list/travel tracker, shared by default (same
 // spirit as the mood board above it: either of you can add/edit/remove).
 // Synced live to vision_goals via useSupabaseSynced.
+import { useState } from "react";
 import Link from "next/link";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
-import { Plane, Sparkle, Target, Plus, Trash2, ExternalLink, MapPin } from "lucide-react";
+import { Plane, Sparkle, Target, Plus, Trash2, ExternalLink, MapPin, Pencil, Check } from "lucide-react";
 
 export function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -49,9 +50,68 @@ const STATUS_ORDER: GoalStatus[] = ["booked", "planned", "idea", "done"];
 
 function GoalCard({ goal, onUpdate, onRemove }: { goal: LifeGoal; onUpdate: (g: LifeGoal) => void; onRemove: () => void }) {
   const Icon = TYPE_META[goal.type].icon;
+  // See the matching comment on Memberships' MembershipCard: collapses
+  // once a title is set; fields auto-save on every keystroke already, so
+  // "Done" just collapses the card back to a summary.
+  const [editing, setEditing] = useState(!goal.title);
+
+  if (!editing) {
+    return (
+      <div
+        className={`rounded-xl2 border border-base-border bg-base-card/40 p-4 ${
+          goal.status === "done" ? "opacity-60" : ""
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-accent-purple">
+              <Icon size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className={`flex items-center gap-1.5 truncate font-medium ${goal.status === "done" ? "text-gray-400 line-through" : "text-white"}`}>
+                {goal.title || "Untitled"}
+                {goal.link && (
+                  <a href={goal.link} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-500 hover:text-white" title="Open">
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+              </p>
+              <p className="text-xs text-gray-500">
+                {TYPE_META[goal.type].label}
+                {goal.target ? ` · ${goal.target}` : ""}
+                {goal.ticketPrice ? ` · ${goal.ticketPrice}` : ""}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className={`relative z-10 inline-block rounded-full border px-2.5 py-0.5 text-xs ${STATUS_META[goal.status].color}`}>
+                  {STATUS_META[goal.status].label}
+                </span>
+                {goal.type !== "goal" && (
+                  <Link
+                    href={`/vision/trip/${goal.id}`}
+                    className="relative z-10 flex items-center gap-1 rounded-full bg-white/5 px-3 py-1 text-xs text-accent-blue hover:bg-white/10 hover:text-white"
+                  >
+                    <MapPin size={12} /> Plan this {goal.type === "trip" ? "trip" : "experience"}
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`rounded-xl2 border border-base-border bg-base-card/40 p-4 ${
+      className={`rounded-xl2 border border-accent-purple/40 bg-base-card/40 p-4 ${
         goal.status === "done" ? "opacity-60" : ""
       }`}
     >
@@ -109,9 +169,14 @@ function GoalCard({ goal, onUpdate, onRemove }: { goal: LifeGoal; onUpdate: (g: 
             </select>
           </div>
         </div>
-        <button type="button" onClick={onRemove} className="mt-1 shrink-0 text-gray-500 hover:text-red-400" title="Remove">
-          <Trash2 size={16} />
-        </button>
+        <div className="mt-1 flex shrink-0 flex-col items-center gap-2">
+          <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+            <Check size={16} />
+          </button>
+          <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>

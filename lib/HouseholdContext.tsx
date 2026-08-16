@@ -134,13 +134,25 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
         setHouseholdName(null);
         return;
       }
-      const [{ data: household }, { data: rows }] = await Promise.all([
+      const [{ data: household }, { data: rows, error: rowsError }] = await Promise.all([
         supabase.from("households").select("name").eq("id", hid).single(),
         supabase.from("profiles").select("id, display_name").eq("household_id", hid),
       ]);
       setHouseholdName(household?.name ?? null);
-      const real = (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.display_name as string }));
-      setMembers((prevLocal) => mergeRealMembers(prevLocal, real));
+      // Bug fixed 2026-08-16: a transient fetch error (network blip, RLS
+      // hiccup) looked identical to "this household genuinely has zero
+      // other real members" -- rows came back null, ?? [] made it an empty
+      // array, and mergeRealMembers then WIPED every real member from
+      // state (only non-uuid custom-label extras survive the merge).
+      // Since Finance/Health/etc. render tabs as [...members, SHARED],
+      // that silently collapsed a 2+ person household down to just
+      // "Household"/"Shared" tabs until the next successful refetch. Only
+      // update members on a real, error-free response -- an error means
+      // "don't know", not "empty", so the existing (good) cache stays put.
+      if (!rowsError) {
+        const real = (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.display_name as string }));
+        setMembers((prevLocal) => mergeRealMembers(prevLocal, real));
+      }
     } catch {
       // offline/unavailable — local cache (already loaded below) still works
     }

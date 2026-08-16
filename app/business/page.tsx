@@ -4,7 +4,7 @@ import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
-import { ExternalLink, Eye, EyeOff, Plus, X } from "lucide-react";
+import { Check, ExternalLink, Eye, EyeOff, Pencil, Plus, X } from "lucide-react";
 
 const PROJECTS = [
   { name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", type: "SaaS product" },
@@ -111,6 +111,61 @@ function StackRow({ item, onUpdate, onRemove }: { item: StackItem; onUpdate: (v:
   );
 }
 
+function IdeaRow({
+  idea,
+  onUpdate,
+  onCycleStatus,
+  onRemove,
+}: {
+  idea: Idea;
+  onUpdate: (v: Idea) => void;
+  onCycleStatus: () => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
+        <input
+          value={idea.text}
+          onChange={(e) => onUpdate({ ...idea, text: e.target.value })}
+          onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
+          autoFocus
+          className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+        />
+        <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+          <Check size={16} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-white" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
+      <p className="min-w-0 flex-1 truncate text-gray-200">{idea.text}</p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onCycleStatus}
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[idea.status]}`}
+        >
+          {idea.status}
+        </button>
+        <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+          <Pencil size={13} />
+        </button>
+        <button type="button" onClick={onRemove} className="text-gray-500 hover:text-white" title="Remove">
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function BusinessPage() {
   // Business has no per-member split — both household members jointly own
   // every idea/stack entry, so ownerLocalId is always "shared" (-> current
@@ -200,21 +255,13 @@ export default function BusinessPage() {
               <p className="text-xs text-gray-500">No ideas logged yet — click a status pill to cycle new → exploring → shipped.</p>
             )}
             {ideas.map((i) => (
-              <div key={i.id} className="flex items-center justify-between rounded-xl bg-base-card/60 px-3 py-2 text-sm">
-                <p className="text-gray-200">{i.text}</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => cycleStatus(i.id)}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[i.status]}`}
-                  >
-                    {i.status}
-                  </button>
-                  <button type="button" onClick={() => removeIdea(i.id)} className="text-gray-500 hover:text-white">
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
+              <IdeaRow
+                key={i.id}
+                idea={i}
+                onUpdate={(v) => setIdeas((prev) => prev.map((x) => (x.id === i.id ? v : x)))}
+                onCycleStatus={() => cycleStatus(i.id)}
+                onRemove={() => removeIdea(i.id)}
+              />
             ))}
           </div>
         </section>

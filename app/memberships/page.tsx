@@ -10,7 +10,7 @@ import Sidebar from "@/components/Sidebar";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { uid, daysUntil, formatDaysUntil, formatMoney } from "@/lib/financeUtils";
-import { Award, ExternalLink, Plus, Trash2 } from "lucide-react";
+import { Award, Check, ExternalLink, Pencil, Plus, Trash2 } from "lucide-react";
 
 type Currency = "AED" | "LKR" | "USD";
 type Category = "membership" | "loyalty";
@@ -59,11 +59,78 @@ function MembershipCard({
   onUpdate: (v: Membership) => void;
   onRemove: () => void;
 }) {
+  // Collapses to a compact summary card once it has a name -- brand new
+  // (blank) entries start expanded so there's an obvious form to fill in;
+  // existing ones start collapsed and expand via the pencil icon. All
+  // fields already auto-save on every keystroke (no separate draft/save
+  // step), so "Done" just collapses the card back down.
+  const [editing, setEditing] = useState(!m.name);
   const renewalDays = m.renewalDate ? daysUntil(m.renewalDate) : null;
   const expiryDays = m.expiryDate ? daysUntil(m.expiryDate) : null;
 
+  const badges = (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">
+        {CATEGORY_META[m.category]} · {ownerName(m.ownerId)}
+      </span>
+      {m.fee > 0 && (
+        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">
+          {formatMoney(m.fee, m.currency)} / {CADENCE_META[m.renewalCadence].toLowerCase()}
+        </span>
+      )}
+      {renewalDays !== null && (
+        <span
+          className={`rounded-full px-2.5 py-0.5 ${
+            renewalDays <= 14 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"
+          }`}
+        >
+          Renews {formatDaysUntil(renewalDays)}
+        </span>
+      )}
+      {expiryDays !== null && (
+        <span className={`rounded-full px-2.5 py-0.5 ${expiryDays <= 30 ? "bg-red-500/20 text-red-300" : "bg-white/5 text-gray-400"}`}>
+          Expires {formatDaysUntil(expiryDays)}
+        </span>
+      )}
+    </div>
+  );
+
+  if (!editing) {
+    return (
+      <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-accent-purple">
+              <Award size={16} />
+            </div>
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 truncate font-medium text-white">
+                {m.name || "Untitled membership"}
+                {m.link && (
+                  <a href={m.link} target="_blank" rel="noopener noreferrer" className="shrink-0 text-gray-500 hover:text-white" title="Open">
+                    <ExternalLink size={12} />
+                  </a>
+                )}
+              </p>
+              {m.provider && <p className="truncate text-xs text-gray-500">{m.provider}{m.memberNumber ? ` · ${m.memberNumber}` : ""}</p>}
+              <div className="mt-2">{badges}</div>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button type="button" onClick={() => setEditing(true)} className="text-gray-500 hover:text-white" title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-xl2 border border-base-border bg-base-card/40 p-4">
+    <div className="rounded-xl2 border border-accent-purple/40 bg-base-card/40 p-4">
       <div className="mb-3 flex items-start gap-3">
         <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-accent-purple">
           <Award size={16} />
@@ -194,9 +261,14 @@ function MembershipCard({
             />
           </div>
         </div>
-        <button type="button" onClick={onRemove} className="mt-1 shrink-0 text-gray-500 hover:text-red-400" title="Remove">
-          <Trash2 size={16} />
-        </button>
+        <div className="mt-1 flex shrink-0 flex-col items-center gap-2">
+          <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
+            <Check size={16} />
+          </button>
+          <button type="button" onClick={onRemove} className="text-gray-500 hover:text-red-400" title="Remove">
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <div className="mb-3">
         <label className="mb-1 block text-xs text-gray-500">Notes</label>
@@ -208,30 +280,7 @@ function MembershipCard({
           className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
         />
       </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">
-          {CATEGORY_META[m.category]} · {ownerName(m.ownerId)}
-        </span>
-        {m.fee > 0 && (
-          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-gray-300">
-            {formatMoney(m.fee, m.currency)} / {CADENCE_META[m.renewalCadence].toLowerCase()}
-          </span>
-        )}
-        {renewalDays !== null && (
-          <span
-            className={`rounded-full px-2.5 py-0.5 ${
-              renewalDays <= 14 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"
-            }`}
-          >
-            Renews {formatDaysUntil(renewalDays)}
-          </span>
-        )}
-        {expiryDays !== null && (
-          <span className={`rounded-full px-2.5 py-0.5 ${expiryDays <= 30 ? "bg-red-500/20 text-red-300" : "bg-white/5 text-gray-400"}`}>
-            Expires {formatDaysUntil(expiryDays)}
-          </span>
-        )}
-      </div>
+      {badges}
     </div>
   );
 }
