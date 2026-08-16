@@ -18,7 +18,7 @@
 // what lets Finance/Health/etc. attribute data to the right real person
 // without a household-specific hardcoded mapping.
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAdminViewingHouseholdId, clearOwnerMapCache } from "@/lib/supabase/ownerMap";
 
@@ -112,18 +112,60 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
   const [householdName, setHouseholdName] = useState<string | null>(null);
   const [needsPinSetup, setNeedsPinSetup] = useState(false);
 
-  const loadRealHousehold = useCallback(async () => {
+  const fetchInFlightRef = useRef(false);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 2026-08-16 (session #13) hardening: the 5c73c70 fix stopped a
+  // transient fetch error from WIPING an already-good member cache, but
+  // it did nothing to RECOVER a cache that was already bad (e.g. a
+  // browser tab left open since before that fix shipped, or a genuinely
+  // repeated failure this session) -- it just gave up silently for the
+  // rest of the session. Since Finance/Health/etc. all derive their owner
+  // dropdowns from `members`, "give up silently" looked identical to the
+  // original bug: tabs/dropdowns stuck on Household/Shared only, no error
+  // visible anywhere. Three layers added so this class of bug can't
+  // recur invisibly:
+  //   1. Retry with backoff instead of one-shot — a real blip now heals
+  //      itself within seconds instead of requiring a manual reload.
+  //   2. Self floor — even if the roster query keeps failing, the
+  //      currently signed-in person is guaranteed to appear in `members`
+  //      (never JUST "Shared"), because we already know who they are
+  //      from the `me` row that succeeded.
+  //   3. Refetch on tab refocus (see the visibilitychange effect below) —
+  //      closes the "stale long-lived tab" hole without requiring the
+  //      user to know to hard-refresh after a deploy.
+  const loadRealHousehold = useCallback(async (attempt = 0): Promise<void> => {
+    if (attempt === 0) {
+      if (fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
+    }
+    const scheduleRetry = () => {
+      if (attempt >= 4) {
+        fetchInFlightRef.current = false;
+        return;
+      }
+      const delay = 1000 * Math.pow(2, attempt); // 1s,2s,4s,8s
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(() => loadRealHousehold(attempt + 1), delay);
+    };
     try {
       const supabase = createClient();
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id;
-      if (!uid) return;
-      const { data: me } = await supabase
+      if (!uid) {
+        fetchInFlightRef.current = false;
+        return;
+      }
+      const { data: me, error: meError } = await supabase
         .from("profiles")
-        .select("household_id, is_admin, needs_pin_setup")
+        .select("household_id, is_admin, needs_pin_setup, display_name")
         .eq("id", uid)
         .single();
-      if (!me) return;
+      if (meError || !me) {
+        console.error("[HouseholdContext] self profile fetch failed, will retry", meError);
+        scheduleRetry();
+        return;
+      }
       const admin = !!me.is_admin;
       const hid = admin ? getAdminViewingHouseholdId() : me.household_id;
       setIsAdmin(admin);
@@ -132,6 +174,7 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
 
       if (!hid) {
         setHouseholdName(null);
+        fetchInFlightRef.current = false;
         return;
       }
       const [{ data: household }, { data: rows, error: rowsError }] = await Promise.all([
@@ -139,22 +182,27 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
         supabase.from("profiles").select("id, display_name").eq("household_id", hid),
       ]);
       setHouseholdName(household?.name ?? null);
-      // Bug fixed 2026-08-16: a transient fetch error (network blip, RLS
-      // hiccup) looked identical to "this household genuinely has zero
-      // other real members" -- rows came back null, ?? [] made it an empty
-      // array, and mergeRealMembers then WIPED every real member from
-      // state (only non-uuid custom-label extras survive the merge).
-      // Since Finance/Health/etc. render tabs as [...members, SHARED],
-      // that silently collapsed a 2+ person household down to just
-      // "Household"/"Shared" tabs until the next successful refetch. Only
-      // update members on a real, error-free response -- an error means
-      // "don't know", not "empty", so the existing (good) cache stays put.
       if (!rowsError) {
         const real = (rows ?? []).map((r: any) => ({ id: r.id as string, name: r.display_name as string }));
+        // Self floor: guarantee the signed-in user is present even if the
+        // household roster query returned a partial/empty result for some
+        // other reason (RLS edge case, race on a just-created household).
+        if (!admin && me.display_name && !real.some((r) => r.id === uid)) {
+          real.push({ id: uid, name: me.display_name as string });
+        }
         setMembers((prevLocal) => mergeRealMembers(prevLocal, real));
+        fetchInFlightRef.current = false;
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current);
+          retryTimerRef.current = null;
+        }
+      } else {
+        console.error("[HouseholdContext] roster fetch failed, keeping cached members and retrying", rowsError);
+        scheduleRetry();
       }
-    } catch {
-      // offline/unavailable — local cache (already loaded below) still works
+    } catch (err) {
+      console.error("[HouseholdContext] loadRealHousehold threw, keeping cached members and retrying", err);
+      scheduleRetry();
     }
   }, []);
 
@@ -242,6 +290,28 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
       loadRealHousehold().finally(() => setReady(true));
     });
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch on tab refocus, throttled to at most once/minute. Closes the
+  // "long-lived tab left open since before a deploy/fix went live" hole --
+  // without this, a browser tab could sit on a stale/wiped member cache
+  // for the rest of its session with nothing to trigger a recheck.
+  useEffect(() => {
+    const lastFetch = { current: 0 };
+    const maybeRefetch = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastFetch.current < 60_000) return;
+      lastFetch.current = now;
+      loadRealHousehold();
+    };
+    document.addEventListener("visibilitychange", maybeRefetch);
+    window.addEventListener("focus", maybeRefetch);
+    return () => {
+      document.removeEventListener("visibilitychange", maybeRefetch);
+      window.removeEventListener("focus", maybeRefetch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
