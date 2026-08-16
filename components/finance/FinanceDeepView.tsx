@@ -19,22 +19,7 @@ import {
   Bar,
 } from "recharts";
 import type { MonthlyProjectionPoint, BudgetStatus } from "@/lib/financeUtils";
-
-const COLORS = {
-  purple: "#8b7cf9",
-  pink: "#fb7fc4",
-  blue: "#4fc3f7",
-  orange: "#ffa552",
-  green: "#3ddc97",
-  red: "#f87171",
-};
-
-const STATUS_HEX: Record<BudgetStatus, string> = {
-  blue: COLORS.blue,
-  green: COLORS.green,
-  orange: COLORS.orange,
-  red: COLORS.red,
-};
+import { COLORS, STATUS_HEX } from "@/lib/financeUtils";
 
 const tooltipStyle = {
   background: "#20222e",
@@ -114,17 +99,20 @@ export function SpendCategoryDonut({
   cards,
   subs,
   schemes,
+  expenses = 0,
 }: {
   loans: number;
   cards: number;
   subs: number;
   schemes: number;
+  expenses?: number;
 }) {
   const raw = [
     { name: "Loans", value: loans, color: COLORS.blue },
     { name: "Cards", value: cards, color: COLORS.pink },
     { name: "Subscriptions", value: subs, color: COLORS.orange },
     { name: "Payment schemes", value: schemes, color: COLORS.green },
+    { name: "Other expenses", value: expenses, color: COLORS.purple },
   ].filter((d) => d.value > 0);
   const total = raw.reduce((s, d) => s + d.value, 0);
 
@@ -197,5 +185,61 @@ export function CurrencyBalancesBars({ totals, hideBalances }: { totals: Record<
         </ResponsiveContainer>
       )}
     </ChartCard>
+  );
+}
+
+/**
+ * Simplifi-style "Spending Plan" — recurring monthly income minus committed
+ * monthly outflow, converted to one currency via lib/financeUtils.ts's
+ * convertAmount(). Red when negative takes priority over the usual
+ * ratio-based status (see spendingPlanStatus()) since a real household
+ * shortfall matters more than which color band it lands in. Shown at the
+ * top of both Standard and Deep view — this is the single most-requested
+ * piece of Simplifi-style math from the LifeOS strategy session.
+ */
+export function SpendingPlanBanner({
+  safeToSpend,
+  monthlyIncome,
+  monthlyOutflow,
+  status,
+  currency,
+  hasIncome,
+}: {
+  safeToSpend: number;
+  monthlyIncome: number;
+  monthlyOutflow: number;
+  status: BudgetStatus;
+  currency: string;
+  hasIncome: boolean;
+}) {
+  const color = STATUS_HEX[status];
+  return (
+    <section className="glass-card rounded-xl2 p-5">
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color }} />
+          <div>
+            <h3 className="font-medium text-white">Spending Plan</h3>
+            {hasIncome ? (
+              <p className="mt-0.5 text-xs text-gray-500">
+                {Math.round(monthlyIncome).toLocaleString()} recurring income − {Math.round(monthlyOutflow).toLocaleString()} committed
+                outflow, converted to {currency}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs text-gray-500">
+                No recurring income entered yet — add one in the Income section below to see a real safe-to-spend number.
+              </p>
+            )}
+          </div>
+        </div>
+        {hasIncome && (
+          <p className="text-2xl font-semibold" style={{ color }}>
+            {safeToSpend < 0 ? "-" : ""}
+            {Math.round(Math.abs(safeToSpend)).toLocaleString()} {currency}
+            <span className="ml-1.5 text-xs font-normal text-gray-500">/mo safe to spend</span>
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
