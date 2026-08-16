@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import SnapshotChart from "@/components/charts/SnapshotChart";
 import CategoryDonut from "@/components/charts/CategoryDonut";
 import { DashboardHeroSubtitle, UpcomingPaymentsCard, BudgetStatusDot } from "@/components/DashboardLiveWidgets";
+import { useLocalStorage } from "@/lib/useLocalStorage";
+import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_GRADIENT, type QuickLaunchItem } from "@/lib/quickLaunch";
 import {
   HeartPulse,
   Wallet,
@@ -18,12 +22,12 @@ import {
 // chart and category-donut percentages are still placeholder until Supabase
 // wiring — see HANDOVER.md.
 
-const QUICK_LAUNCH = [
-  { name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", status: "healthy" },
-  { name: "RetailSuite", url: "https://retailsuite.onrender.com/", status: "healthy" },
-];
-
 export default function DashboardPage() {
+  // Quick Launch is user-customizable from Settings (Phase 0 backlog) — see
+  // lib/quickLaunch.ts for the shared type/storage key/color lookup (used
+  // by both this page and Settings, so they never drift).
+  const [quickLaunch] = useLocalStorage<QuickLaunchItem[]>(QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH);
+
   return (
     <div className="flex min-h-screen bg-base-bg">
       <Sidebar />
@@ -53,20 +57,21 @@ export default function DashboardPage() {
               <UpcomingPaymentsCard />
 
               <div className="space-y-4">
-                {QUICK_LAUNCH.map((app) => (
+                {quickLaunch.length === 0 && (
+                  <Link href="/settings" className="glass-card block rounded-xl2 p-5 text-center text-xs text-gray-500 hover:text-white">
+                    No quick launch shortcuts yet — add some in Settings.
+                  </Link>
+                )}
+                {quickLaunch.map((app) => (
                   <a
-                    key={app.name}
+                    key={app.id}
                     href={app.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`glossy-gradient block rounded-xl2 bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${
-                      app.name === "ShelfPulse"
-                        ? "from-pink-500 to-rose-400 shadow-glow-pink"
-                        : "from-sky-500 to-blue-500 shadow-glow-blue"
-                    }`}
+                    className={`glossy-gradient block rounded-xl2 bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${QUICK_LAUNCH_GRADIENT[app.color]}`}
                   >
                     <p className="relative z-10 text-xs uppercase tracking-wide text-white/80">Quick launch</p>
-                    <p className="relative z-10 mt-2 text-lg font-semibold text-white">{app.name}</p>
+                    <p className="relative z-10 mt-2 text-lg font-semibold text-white">{app.label}</p>
                     <p className="relative z-10 text-xs text-white/80">{app.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</p>
                   </a>
                 ))}

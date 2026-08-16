@@ -9,7 +9,34 @@ import { createClient } from "@/lib/supabase/client";
 import { setAdminViewingHousehold, getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
 import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions";
 import TwoFactorSettings from "@/components/TwoFactorSettings";
-import { Bell, Building2, Check, Key, Lock, Plus, RotateCcw, Trash2, Users } from "lucide-react";
+import { Bell, Building2, Check, Key, Lock, Plus, Rocket, RotateCcw, Trash2, Users } from "lucide-react";
+import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_SWATCH, type QuickLaunchColor, type QuickLaunchItem } from "@/lib/quickLaunch";
+
+function uid() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+const QUICK_LAUNCH_COLORS: QuickLaunchColor[] = ["pink", "blue", "purple", "green", "orange"];
+
+// Read-only Business project list, so a Quick Launch shortcut can point at
+// a specific project instead of a hand-typed URL. Deliberately not
+// useSupabaseSynced (this section never writes to business_projects) —
+// same "plain read-only fetch" pattern as lib/supabase/useFxRates.ts.
+function useBusinessProjectOptions() {
+  const [options, setOptions] = useState<{ name: string; url: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase.from("business_projects").select("name,url");
+      if (!cancelled && !error && data) setOptions(data as { name: string; url: string }[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return options;
+}
 
 type Notif = { emailReminders: boolean; browserAlerts: boolean; weeklyDigest: boolean };
 
@@ -379,6 +406,22 @@ export default function SettingsPage() {
 
   const toggle = (key: keyof Notif) => setNotif((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  // Quick Launch customization (Phase 0 backlog) — per-device shortcut list
+  // shown on the Dashboard. See lib/quickLaunch.ts for the shared type.
+  const [quickLaunch, setQuickLaunch] = useLocalStorage<QuickLaunchItem[]>(QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH);
+  const businessProjects = useBusinessProjectOptions();
+  const [newQL, setNewQL] = useState({ label: "", url: "", color: "purple" as QuickLaunchColor });
+  const addQuickLaunch = () => {
+    if (!newQL.label.trim() || !newQL.url.trim()) return;
+    setQuickLaunch((prev) => [...prev, { id: uid(), label: newQL.label.trim(), url: newQL.url.trim(), color: newQL.color }]);
+    setNewQL({ label: "", url: "", color: "purple" });
+  };
+  const removeQuickLaunch = (id: string) => setQuickLaunch((prev) => prev.filter((q) => q.id !== id));
+  const pickBusinessProject = (name: string) => {
+    const proj = businessProjects.find((p) => p.name === name);
+    if (proj) setNewQL((s) => ({ ...s, label: proj.name, url: proj.url }));
+  };
+
   return (
     <div className="flex min-h-screen bg-base-bg">
       <Sidebar />
@@ -455,6 +498,72 @@ export default function SettingsPage() {
             >
               <Plus size={14} /> Add
             </button>
+          </div>
+        </section>
+
+        <section className="glass-card rounded-xl2 p-5">
+          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+            <Rocket size={16} className="text-accent-orange" /> Quick Launch
+          </h2>
+          <p className="relative z-10 mb-4 text-sm text-gray-400">
+            Shortcuts shown on your Dashboard. Point one at a Business project or a custom URL. Saved on this device.
+          </p>
+          <div className="relative z-10 space-y-2">
+            {quickLaunch.map((q) => (
+              <div key={q.id} className="flex items-center justify-between gap-3 rounded-xl bg-base-card/60 p-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className={`h-3 w-3 shrink-0 rounded-full ${QUICK_LAUNCH_SWATCH[q.color]}`} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-gray-200">{q.label}</p>
+                    <p className="truncate text-xs text-gray-500">{q.url}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => removeQuickLaunch(q.id)} className="shrink-0 text-gray-500 hover:text-red-400">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {quickLaunch.length === 0 && <p className="text-xs text-gray-500">No shortcuts yet — add one below.</p>}
+          </div>
+          <div className="relative z-10 mt-4 space-y-2 border-t border-base-border pt-4">
+            {businessProjects.length > 0 && (
+              <select
+                defaultValue=""
+                onChange={(e) => e.target.value && pickBusinessProject(e.target.value)}
+                className="w-full rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple sm:w-auto"
+              >
+                <option value="">Prefill from a Business project...</option>
+                {businessProjects.map((p) => (
+                  <option key={p.name} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={newQL.label}
+                onChange={(e) => setNewQL((s) => ({ ...s, label: e.target.value }))}
+                placeholder="Label"
+                className="min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+              />
+              <input
+                value={newQL.url}
+                onChange={(e) => setNewQL((s) => ({ ...s, url: e.target.value }))}
+                placeholder="URL"
+                className="min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+              />
+              <select
+                value={newQL.color}
+                onChange={(e) => setNewQL((s) => ({ ...s, color: e.target.value as QuickLaunchColor }))}
+                className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none"
+              >
+                {QUICK_LAUNCH_COLORS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button type="button" onClick={addQuickLaunch} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
+                <Plus size={14} /> Add
+              </button>
+            </div>
           </div>
         </section>
 
