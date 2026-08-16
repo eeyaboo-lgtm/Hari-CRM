@@ -8,7 +8,8 @@ import { useHousehold } from "@/lib/HouseholdContext";
 import { createClient } from "@/lib/supabase/client";
 import { setAdminViewingHousehold, getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
 import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions";
-import { Bell, Building2, Check, Key, Lock, Plus, RotateCcw, ShieldCheck, Trash2, Users } from "lucide-react";
+import TwoFactorSettings from "@/components/TwoFactorSettings";
+import { Bell, Building2, Check, Key, Lock, Plus, RotateCcw, Trash2, Users } from "lucide-react";
 
 type Notif = { emailReminders: boolean; browserAlerts: boolean; weeklyDigest: boolean };
 
@@ -487,15 +488,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-            <ShieldCheck size={16} className="text-accent-green" /> Security
-          </h2>
-          <p className="relative z-10 text-sm text-gray-400">
-            Enable authenticator-app MFA here once accounts exist — see SECURITY.md §1. Login lockout and audit log
-            are already active at the database level regardless of this screen.
-          </p>
-        </section>
+        <TwoFactorSettings />
       </main>
     </div>
   );

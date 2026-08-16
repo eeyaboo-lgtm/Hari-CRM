@@ -1,9 +1,12 @@
+import Link from "next/link";
 import { login } from "./actions";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: "Enter a valid email and password.",
   locked: "Too many failed attempts. Try again in a few minutes.",
   invalid_credentials: "Invalid email or password.",
+  oauth_failed: "Google sign-in failed. Try again.",
 };
 
 export default function LoginPage({
@@ -29,7 +32,16 @@ export default function LoginPage({
           </div>
         )}
 
-        <form action={login} className="mt-6 space-y-4">
+        <div className="mt-6">
+          <GoogleSignInButton next="/dashboard" />
+        </div>
+        <div className="my-4 flex items-center gap-3 text-xs text-gray-500">
+          <div className="h-px flex-1 bg-base-border" />
+          or
+          <div className="h-px flex-1 bg-base-border" />
+        </div>
+
+        <form action={login} className="space-y-4">
           <div>
             <label className="mb-1 block text-xs text-gray-400" htmlFor="email">
               Email
@@ -43,9 +55,14 @@ export default function LoginPage({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-400" htmlFor="password">
-              Password
-            </label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-xs text-gray-400" htmlFor="password">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-xs text-accent-purple">
+                Forgot?
+              </Link>
+            </div>
             <input
               id="password"
               name="password"
@@ -64,8 +81,10 @@ export default function LoginPage({
         </form>
 
         <p className="mt-4 text-center text-xs text-gray-500">
-          MFA (authenticator app) can be enabled per-account in Settings once
-          the account is created — see SECURITY.md.
+          New household?{" "}
+          <Link href="/signup" className="text-accent-purple">
+            Create one
+          </Link>
         </p>
       </div>
     </div>
