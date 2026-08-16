@@ -1,4 +1,77 @@
-# Hari-CRM — Session Handover (2026-08-17, latest #18 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-17, latest #19 — READ THIS FIRST)
+
+## Status: All 6 of #18's items shipped & live (items 1,2,3,4,5,7) — item 6 still blocked on user data
+
+**Live:** commit `8bbb258`, deploy `dep-da12ncoae00c7383sprg`, confirmed `status:"live"`. Build 0
+errors, 16 routes. Unauthenticated fetch spot-check on `/finance` — redirects to `/login`, no 500.
+Pushed with the fresh PAT the user pasted at session start (per usual, not persisted).
+
+**What shipped, one commit, all of #18's build list except item 6:**
+
+1. **Recurring income + live Spending Plan.** `finance_income` gained `is_recurring boolean` +
+   `cadence text` ('monthly'/'yearly'); Shenaal's existing salary row was updated to
+   `is_recurring=true, cadence='monthly'` in the same migration. New **Income section** in Standard
+   view (add/edit/delete, pencil/check pattern) — this data had never been exposed in the UI before,
+   only inserted via SQL last session. New **Spending Plan banner**
+   (`SpendingPlanBanner` in `FinanceDeepView.tsx`) shown at the top of the page in both Standard and
+   Deep view: recurring income − committed outflow, **converted to AED** (item 5), red when negative,
+   reusing `spendingPlanStatus()`/`BUDGET_STATUS_CLASSES` — no new color logic. Shenaal's real
+   ~-3,055 AED/month shortfall should now show up red once he marks his salary row recurring (it
+   already is, from this session's migration) — **worth a quick visual check next session**.
+2. **Unified Add Expense flow.** New `finance_expenses` table (`expense_type` enum
+   monthly/fixed_term/one_off, `min_amount`/`max_amount`/`is_estimated`, `billing_day`/`start_date`/
+   `end_date`/`due_date` as relevant per type, `notes`, `paid`). New **Expenses section** at the
+   bottom of Standard view, same pencil/check edit pattern as everywhere else, type-specific fields
+   swap in/out based on the selected type. Feeds into `monthlyOutflow` (face value) and the Spend
+   Category donut (new "Other expenses" slice) same as Loans/Subs/Schemes do.
+3. **`estimateFromRange(min, max, roundTo)`** in `lib/financeUtils.ts` — pure function, midpoint
+   rounded to the nearest 5. Wired into the Add Expense amount field via an "I don't have an exact
+   number" checkbox that swaps a single Amount input for Min/Max inputs + a live-computed estimate
+   preview.
+4. **Subscriptions gained `notes` + temporary-override** (`elevated_amount numeric`,
+   `effective_until date`). Edit form has both; display row shows an "elevated until `<date>`" badge
+   (accent-orange) while an override is active, and an italic notes line if set. `activeSubAmount(s)`
+   is now the single source of truth used everywhere a sub's amount matters (monthly cost, upcoming
+   payments, next-major-payment, the cash-flow projection) — auto-reverts to the baseline once today
+   passes `effective_until`, no manual cleanup needed. **Tabby's spike and the ENBD credit card's
+   extra interest still need the user to actually set these values in the UI** — the columns exist
+   now but weren't backfilled with real numbers this session (wasn't asked to).
+5. **Real currency conversion.** `fx_rates` seeded with live AED/LKR/USD mid-market rates fetched
+   this session (1 USD = 3.6725 AED official peg, 1 AED ≈ 90.66 LKR). New `convertAmount()`/
+   `convertTotalsToCurrency()` in `financeUtils.ts`, new read-only `lib/supabase/useFxRates.ts` hook
+   (deliberately NOT `useSupabaseSynced` — this is a lookup table, no owner/visibility). Falls back to
+   face value if a rate's missing, same disclosed convention as before. **Deliberately did NOT replace
+   the existing face-value `monthlyOutflow`/category-donut/currency-bars figures** — per the ask, kept
+   both: face-value sum stays exactly as before, real conversion is new and feeds specifically the
+   Spending Plan (where an honest single number actually matters for the red/green call).
+6. **Item 6 (ENBD Credit Card → `finance_cards`) intentionally skipped** — still waiting on the user's
+   real credit limit + outstanding balance, asked twice now (session #18 and before), not yet
+   answered. Ask again next session before attempting.
+7. **Color coding.** Hoisted `COLORS`/`STATUS_HEX` out of `FinanceDeepView.tsx` into
+   `lib/financeUtils.ts` (single source of truth now — `FinanceDeepView.tsx` just imports them). Every
+   new component this session (Spending Plan banner, expense-type badges, override badge) reuses
+   `accent.*`/`BUDGET_STATUS_CLASSES` — the only non-Tailwind-token hex anywhere is the pre-existing
+   `COLORS.red`/`#f87171`, same one-time exception as before (no `accent.red` in `tailwind.config.ts`).
+
+**One real bug caught and fixed mid-session, not just a feature note:** the first draft of the
+Expenses section used template-literal Tailwind classes (`` `bg-${typeColor}/20` ``) for the
+type badge. Tailwind's static scanner only picks up **literal** class strings present verbatim in
+source — a JS-interpolated class name is silently dropped from the compiled CSS in both dev and
+prod (not just prod), so those badges would have rendered unstyled. Fixed by switching to a
+lookup returning one full literal class string per branch (`typeBadgeCls`). **Pattern to watch
+for**: any future `className={`...${variable}...`}` with a variable Tailwind utility segment is
+this same bug — always use a literal-string lookup instead.
+
+**Not done this session, disclosed rather than skipped silently:** no real logged-in click-through
+of the new Income/Expenses sections or the Spending Plan banner — same standing limitation as
+every session (no household passcode given to Claude, by design). Next session or the user should:
+sign in as Shenaal, check the Spending Plan banner shows red with a real negative number now that
+his salary is marked recurring, add one test expense of each type (monthly/fixed-term/one-off) and
+confirm it survives a refresh, and try the estimate-range toggle once.
+
+---
+
+# Hari-CRM — Session Handover (2026-08-17, #18)
 
 ## Status: Finance "Deep view" toggle shipped & live; Shenaal's real finance data loaded; next up is closing the gaps that showed up from using real data
 
