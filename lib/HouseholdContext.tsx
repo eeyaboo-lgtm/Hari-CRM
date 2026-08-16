@@ -214,7 +214,20 @@ export function HouseholdProvider({ children }: { children: React.ReactNode }) {
         setNeedsPinSetup(false);
         return;
       }
-      loadRealHousehold();
+      // Bug fixed 2026-08-16: switching TO a new account (e.g. logging in
+      // as Natasha & Arun right after an admin session) is also a
+      // server-action redirect, so this component doesn't remount and
+      // `ready` was already true from the previous account's session.
+      // ProfileGate reads `ready`/`isAdmin`/`needsPinSetup` synchronously
+      // on render, so for the ~1-2s this fetch takes, it was rendering
+      // the PREVIOUS account's already-unlocked dashboard — a real
+      // privacy leak on a shared device, only self-correcting once the
+      // user navigated again (by which point the wrong content had
+      // already been on screen). Drop `ready` back to false for the
+      // duration of the refetch so ProfileGate shows its blank loading
+      // state instead of stale/previous-account content.
+      setReady(false);
+      loadRealHousehold().finally(() => setReady(true));
     });
     return () => subscription.unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
