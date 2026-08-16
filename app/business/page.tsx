@@ -6,11 +6,17 @@ import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { Check, ExternalLink, Eye, EyeOff, Pencil, Plus, X } from "lucide-react";
 
-const PROJECTS = [
-  { name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", type: "SaaS product" },
-  { name: "RetailSuite", url: "https://retailsuite.onrender.com/", type: "SaaS product" },
-  { name: "UnwindCircle", url: "https://unwindcircle.com/", type: "Content site" },
-  { name: "Dino History", url: "https://dinohistory.com/", type: "Content site" },
+type Project = { id: string; name: string; url: string; projectType: string; notes: string };
+
+// Seed data — only used the very first time business_projects is empty
+// (useSupabaseSynced treats this as the initial value before its real
+// fetch completes/replaces it). Once real rows exist in Supabase this
+// array is never consulted again.
+const DEFAULT_PROJECTS: Project[] = [
+  { id: "p1", name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", projectType: "SaaS product", notes: "" },
+  { id: "p2", name: "RetailSuite", url: "https://retailsuite.onrender.com/", projectType: "SaaS product", notes: "" },
+  { id: "p3", name: "UnwindCircle", url: "https://unwindcircle.com/", projectType: "Content site", notes: "" },
+  { id: "p4", name: "Dino History", url: "https://dinohistory.com/", projectType: "Content site", notes: "" },
 ];
 
 type Idea = { id: string; text: string; status: "new" | "exploring" | "shipped" };
@@ -185,6 +191,30 @@ export default function BusinessPage() {
   });
   const [presetPick, setPresetPick] = useState(STACK_PRESETS[0].service);
 
+  // Business page: editable project cards (Phase 0 backlog) — same
+  // useSupabaseSynced + pencil/check pattern as everywhere else in the app.
+  const [projects, setProjects] = useSupabaseSynced<Project>("business_projects", "business.projects.v1", DEFAULT_PROJECTS, {
+    ownerLocalId: () => "shared",
+    toRow: (p) => ({ name: p.name, project_type: p.projectType || "Project", url: p.url || null, notes: p.notes || null }),
+    fromRow: (row) => ({ id: row.id, name: row.name, url: row.url ?? "", projectType: row.project_type ?? "Project", notes: row.notes ?? "" }),
+  });
+  const [newProject, setNewProject] = useState({ name: "", url: "", projectType: "", notes: "" });
+  const addProject = () => {
+    if (!newProject.name.trim()) return;
+    setProjects((prev) => [...prev, { id: uid(), name: newProject.name.trim(), url: newProject.url.trim(), projectType: newProject.projectType.trim() || "Project", notes: newProject.notes.trim() }]);
+    setNewProject({ name: "", url: "", projectType: "", notes: "" });
+  };
+  const removeProject = (id: string) => setProjects((prev) => prev.filter((p) => p.id !== id));
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [projectDraft, setProjectDraft] = useState<Project | null>(null);
+  const startEditProject = (p: Project) => { setEditingProjectId(p.id); setProjectDraft({ ...p }); };
+  const saveProject = () => {
+    if (!projectDraft) return;
+    setProjects((prev) => prev.map((p) => (p.id === projectDraft.id ? projectDraft : p)));
+    setEditingProjectId(null);
+    setProjectDraft(null);
+  };
+
   const addIdea = () => {
     if (!text.trim()) return;
     setIdeas((prev) => [...prev, { id: uid(), text: text.trim(), status: "new" }]);
@@ -221,19 +251,79 @@ export default function BusinessPage() {
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {PROJECTS.map((p) => (
-            <a
-              key={p.name}
-              href={p.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="glass-card block rounded-xl2 p-5 transition-colors hover:bg-white/[0.06]"
-            >
-              <p className="relative z-10 text-xs uppercase tracking-wide text-gray-500">{p.type}</p>
-              <h2 className="relative z-10 mt-1 font-medium text-white">{p.name}</h2>
-              <p className="relative z-10 mt-1 truncate text-xs text-accent-blue">{p.url}</p>
-            </a>
-          ))}
+          {projects.map((p) => {
+            if (editingProjectId === p.id && projectDraft) {
+              return (
+                <div key={p.id} className="glass-card space-y-2 rounded-xl2 border border-accent-purple/40 p-4">
+                  <input
+                    value={projectDraft.name}
+                    onChange={(e) => setProjectDraft({ ...projectDraft, name: e.target.value })}
+                    placeholder="Name"
+                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+                  />
+                  <input
+                    value={projectDraft.projectType}
+                    onChange={(e) => setProjectDraft({ ...projectDraft, projectType: e.target.value })}
+                    placeholder="Type (e.g. SaaS product)"
+                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                  />
+                  <input
+                    value={projectDraft.url}
+                    onChange={(e) => setProjectDraft({ ...projectDraft, url: e.target.value })}
+                    placeholder="URL"
+                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                  />
+                  <input
+                    value={projectDraft.notes}
+                    onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value })}
+                    placeholder="Notes (optional)"
+                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={saveProject} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                    <button type="button" onClick={() => setEditingProjectId(null)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={p.id} className="glass-card group relative rounded-xl2 p-5 transition-colors hover:bg-white/[0.06]">
+                <div className="absolute right-3 top-3 z-20 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button type="button" onClick={() => startEditProject(p)} className="text-gray-500 hover:text-white"><Pencil size={13} /></button>
+                  <button type="button" onClick={() => removeProject(p.id)} className="text-gray-500 hover:text-red-400"><X size={14} /></button>
+                </div>
+                <a href={p.url || "#"} target="_blank" rel="noopener noreferrer" className="relative z-10 block">
+                  <p className="text-xs uppercase tracking-wide text-gray-500">{p.projectType}</p>
+                  <h2 className="mt-1 font-medium text-white">{p.name}</h2>
+                  <p className="mt-1 truncate text-xs text-accent-blue">{p.url}</p>
+                  {p.notes && <p className="mt-1 text-xs italic text-gray-500">{p.notes}</p>}
+                </a>
+              </div>
+            );
+          })}
+          <div className="glass-card space-y-2 rounded-xl2 p-4">
+            <input
+              value={newProject.name}
+              onChange={(e) => setNewProject((s) => ({ ...s, name: e.target.value }))}
+              placeholder="New project name"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+            <input
+              value={newProject.projectType}
+              onChange={(e) => setNewProject((s) => ({ ...s, projectType: e.target.value }))}
+              placeholder="Type (e.g. SaaS product)"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+            />
+            <input
+              value={newProject.url}
+              onChange={(e) => setNewProject((s) => ({ ...s, url: e.target.value }))}
+              placeholder="URL"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+            />
+            <button type="button" onClick={addProject} className="flex w-full items-center justify-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
+              <Plus size={14} /> Add project
+            </button>
+          </div>
         </div>
 
         <section className="glass-card rounded-xl2 p-5">
