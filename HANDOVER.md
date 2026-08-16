@@ -1,4 +1,61 @@
-# Hari-CRM — Session Handover (2026-08-16, latest #12 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-16, latest #15 — READ THIS FIRST)
+
+## Status: Phase 1 of BACKLOG.md shipped — signup, Google login (code done), 2FA, password reset
+Commit `f290ca9`, deploy `dep-da0v87qd0e5s73aud3qg` (confirmed `status:"live"`). Build 0
+errors, 17 routes (added `/signup`, `/forgot-password`, `/reset-password`, `/login/mfa`,
+`/auth/callback`). Push token pasted fresh at session start (per usual). Unauthenticated
+curl spot-check on all 5 new routes: 200, no 500s. `get_advisors` (security) run after the
+new `handle_new_user_household()` trigger — no new findings, only pre-existing ones.
+
+**What shipped:**
+1. **Real signup** — `/signup` (client-side `supabase.auth.signUp()`, no service_role
+   needed) + a `handle_new_user_household()` trigger on `auth.users` insert that atomically
+   creates the matching `households` + `profiles` rows (household name + display name come
+   from `signUp()`'s `options.data`, or from Google's profile data on first OAuth login).
+   Replaces the old hand-seeded-SQL-per-household workaround for *new* households going
+   forward — existing 4 households untouched.
+2. **Google sign-in** — `GoogleSignInButton.tsx` + `/auth/callback` (PKCE code exchange,
+   shared by OAuth/email-verify/password-reset links) are done and deployed, but **the
+   button will error until Google OAuth creds are set up** — see `GOOGLE-OAUTH-SETUP.md`
+   for the exact 2-step manual process (Google Cloud Console Client ID/Secret → paste into
+   Supabase Dashboard → Auth → Providers → Google). No MCP tool can do this step.
+3. **Password reset by email** — `/forgot-password` + `/reset-password`, native Supabase
+   Auth, generic "if that email exists" message either way (no email-enumeration leak).
+4. **Optional TOTP 2FA** — Settings → Security now has real enroll/verify/disable UI
+   (`TwoFactorSettings.tsx`, replacing the old placeholder paragraph). `/login/mfa` is a
+   full-screen step-up gate (with a logout escape hatch — learned from the #10/#11
+   PinSetupGate incident) enforced in `middleware.ts` via
+   `supabase.auth.mfa.getAuthenticatorAssuranceLevel()`. Off by default, zero behavior
+   change for existing accounts until someone opts in.
+
+**Found and fixed a data-integrity issue, not just app code:** the synced workspace
+folder's copies of `lib/HouseholdContext.tsx`, `VisionBoard.tsx`, `VisionGoals.tsx`,
+`health/business/memberships/vision` pages, `HANDOVER.md`, `PROJECT-STATUS.md` had drifted
+stale — reflecting an *older* pre-#13-hardening version than what's actually live on
+GitHub/Render. Caught via `git diff` before committing (would have silently regressed the
+retry-with-backoff/self-floor/refocus-refetch fix from session #13 if pushed blindly).
+Restored from `origin/main` into the workspace folder instead of committing the stale
+versions. Also committed `BACKLOG.md` and `LifeOS-Billion-Dollar-Strategy.md` to git for
+the first time — they only existed in the local workspace folder before, unprotected by
+version control.
+
+**Manual steps still needed from the user (no MCP tool can do these):**
+- Google OAuth Client ID/Secret → Supabase Dashboard (see `GOOGLE-OAUTH-SETUP.md`).
+- Verify "Confirm email" is ON in Supabase Dashboard → Auth → Providers → Email (can't be
+  read or set via any available Supabase MCP tool — dashboard-only).
+- Optional, surfaced by this session's `get_advisors` run: "Leaked Password Protection" is
+  OFF — a free one-click toggle in Supabase Dashboard → Auth → Providers → Email that
+  checks new passwords against HaveIBeenPwned. Not done, just flagged.
+
+**Not done this session:** no real logged-in click-through test of the new signup/2FA/reset
+flows (would need a throwaway email account + Claude doesn't have/shouldn't have real
+household passcodes). Next session or the user should: sign up a fresh test household end
+to end, enroll 2FA on one account and confirm the `/login/mfa` gate actually appears on
+next login, and once Google creds are pasted in, test the Google button.
+
+---
+
+# Hari-CRM — Session Handover (2026-08-16, #12)
 
 ## Status: all 4 backlog items from #11 shipped, build-verified, pushed, deployed live
 Commit `5c73c70`, deploy `dep-da0t7vdg1s2s73bqa68g` (confirmed `status:"live"`). Build
