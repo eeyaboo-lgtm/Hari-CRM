@@ -17,7 +17,15 @@
 
 ## Phase 2 — Differentiate (steal the good, skip the bad, per competitor research)
 - [ ] **Cozi-style core**: shared color-coded calendar, meal planning → shopping list, real-time multi-device sync, unified activity feed
-- [ ] **Simplifi-style Finance math**: real-time Spending Plan (safe-to-spend, recalculated live), rolling 12-month Projected Cash Flow, pinnable Watchlists — all buildable on data already in Finance, no bank-sync needed
+- [x] Finance **Standard/Deep view toggle** + 12-month Projected Cash Flow chart, spend-category donut, budget gauge, currency bars — shipped 2026-08-17, commit `76ec81c`, live.
+- [ ] **Spending Plan**: real-time safe-to-spend (income − committed outflow, live, red when negative) — needs a recurring-income concept first (`finance_income` is point-in-time only today). Biggest remaining Simplifi piece — see `HANDOVER.md` #18 item 1.
+- [ ] Pinnable Watchlists
+- [ ] **Unified "Add expense" flow** (monthly recurring / fixed-term / one-off in one place, incl. pure one-off costs which have nowhere to go today) — `HANDOVER.md` #18 item 2
+- [ ] **Estimated-figure entry**: min–max range input, auto-midpoint rounded to nearest sensible value — `HANDOVER.md` #18 item 3
+- [ ] `notes` column on `finance_subscriptions` + temporary-override support (elevated amount + effective-until date) — `HANDOVER.md` #18 item 4
+- [ ] Real currency conversion (`fx_rates` table is populated with 0 rows today, everything sums at face value) — `HANDOVER.md` #18 item 5
+- [ ] Move ENBD Credit Card into `finance_cards` once real limit/outstanding are known — `HANDOVER.md` #18 item 6
+- [ ] Consistent color coding across all new Finance UI, reusing the existing `accent.*` palette / `BUDGET_STATUS_CLASSES` — no new ad-hoc colors — `HANDOVER.md` #18 item 7
 - [ ] **Rocket Money-style cheap wins**: smart alerts (approaching budget limit, large purchase detected), simple net-worth rollup
 - [ ] **FamilyWall UI lesson applied**: audit every module against "would the least tech-confident family member get this instantly" — not a single feature, a design pass
 - [ ] **Document vault** (LifeHub-style: emergency contacts, insurance, estate docs, caregiver-shareable) — only after Phase 1's security audit is done

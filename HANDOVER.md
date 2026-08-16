@@ -1,4 +1,97 @@
-# Hari-CRM — Session Handover (2026-08-16, latest #15 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-17, latest #18 — READ THIS FIRST)
+
+## Status: Finance "Deep view" toggle shipped & live; Shenaal's real finance data loaded; next up is closing the gaps that showed up from using real data
+
+**Live:** commit `76ec81c`, deploy `dep-da129tm7bikc73ccnq6g` triggered automatically on push,
+should be `status:"live"` by the time you read this (confirm with `get_deploy` if paranoid).
+Build was 0 errors, 17 routes.
+
+**What shipped this session:**
+1. Finance page got a **Standard/Deep view toggle** (top-right, `localStorage: finance.viewMode`,
+   per-device). Deep view is purely additive — 4 new charts (`components/finance/FinanceDeepView.tsx`,
+   recharts) above the existing sections: 12-month **projected cash flow** (real math, new
+   `projectMonthlyOutflow()` in `lib/financeUtils.ts` — loans drop off at tenure end, yearly
+   items land only in their real due month), a **spend-category donut** (loans/cards/subs/
+   schemes split), a **budget gauge** (hand-rolled SVG, reuses existing `budgetStatus()`
+   red/orange/green/blue), and **per-currency balance bars** (hidden behind the existing
+   `hideBalances` toggle, doesn't try to blur SVG text).
+2. **Shenaal's real household finance data is live in Supabase** — user pasted a full snapshot
+   from another project and asked me to enter it via SQL rather than the UI. Salary income,
+   balance snapshot, ENBD Personal Loan (principal AED 60,843.94 + 10.74% rate **back-solved
+   exactly** from the given EMI/remaining-balance/payments-made — verified it reproduces
+   the exact AED 33,663.71 remaining balance), 12 recurring subscriptions, rent as a
+   2-installment payment scheme (exact Sept 14 / Dec 14 2026 dates). All 4 originally-unknown
+   due-days were asked (not guessed) and corrected: ENBD Personal Loan is the 27th (deducted a
+   day before salary — brief negative-balance pattern, see gap #1 below), Car Finance the 1st,
+   ENBD Appliance + Phone EMIs both the 4th (same as the credit card statement date).
+
+**Environment note:** hit a `/tmp` disk-full wall this session from a previous session's
+leftover work directories with no delete permission — worked around it by symlinking that
+old session's still-readable `node_modules` into a fresh rsynced source tree instead of a full
+`npm install`. If `/tmp` is full again next session, try that trick before spending a long time
+on cleanup (`ls -ld /tmp/*/node_modules`, symlink one in rather than reinstalling).
+
+## Next session — user's explicit ask (2026-08-17), in priority order
+
+Using Shenaal's real data surfaced concrete gaps between what the schema holds and what a real
+household budget needs. The user has now explicitly asked for all of the below — build in this
+order, each is meaningfully separate work:
+
+1. **Real income vs. outflow math — the biggest gap.** `finance_income` is point-in-time only;
+   nothing today subtracts outflow from income anywhere in the app, despite Shenaal's real numbers
+   showing an actual **-3,055 AED/month shortfall** that's currently invisible. Add a recurring-income
+   concept (simplest: a per-household "monthly income" setting, same pattern as the existing
+   `finance.monthlyBudget`, or a proper `is_recurring`+`cadence` pair on `finance_income` if multiple
+   income sources need tracking separately — Shenaal salary vs. Shalini's currently-AED-0). Then build
+   the actual Simplifi "Spending Plan": safe-to-spend = income − committed outflow, live, shown
+   prominently in Deep View, **red when negative** (reuse `BUDGET_STATUS_CLASSES`/`accent` palette,
+   don't invent new colors) — this is the single most requested piece of Simplifi-style math from the
+   original LifeOS strategy session ([[project_hari_lifeos_strategy]]).
+2. **Editable, unified expense entry — add/remove monthly, fixed-term, and one-off expenses from one
+   place.** Right now a new expense has to be shoehorned into whichever of loans/subscriptions/schemes
+   happens to fit, and pure one-off costs (e.g. the car registration renewal, ~AED 500, no fixed date)
+   have nowhere to go at all. Build a single "Add expense" flow with an explicit `type`: **monthly
+   recurring** (subscriptions-shaped), **fixed-term** (has a start + end, like a loan/EMI), or
+   **one-off** (single date, no recurrence — new lightweight table or a relaxed payment-scheme-item
+   that doesn't require a parent scheme). Every entry must be fully editable in place afterward
+   (pencil/check pattern already used everywhere else in the app — see
+   [[feedback_finance_editability]] — don't reintroduce the old "add-only, no edit" gap).
+3. **Estimated-figure entry with auto-midpoint rounding.** When the user doesn't have an exact
+   number (e.g. "DEWA is AED 350–500, varies seasonally" — this session I hand-averaged several of
+   these to insert Shenaal's data), let them enter a **min–max range** instead of one number, and
+   auto-compute the stored/displayed figure as the midpoint **rounded to the nearest sensible value**
+   (e.g. nearest 5 or 25, not a raw decimal) — write this as a small pure function in
+   `lib/financeUtils.ts` (`estimateFromRange(min, max, roundTo)`), same testable-pure-function pattern
+   as `calcEMI`/`projectMonthlyOutflow`, and reuse it wherever an amount field appears in the new
+   unified expense flow.
+4. **Notes field + "temporarily elevated" amounts.** `finance_subscriptions` has no notes/description
+   column (accounts and loans both do — this session hit that gap directly: Tabby's 4-month spike to
+   AED 900-1,000 and the credit card's extra ~AED 100-120/mo interest-on-minimum had nowhere to be
+   recorded and are only noted here in this doc). Add a `notes` column via migration, and consider a
+   simple `effective_until` date + `elevated_amount` pair so a temporary override doesn't need a
+   free-text workaround and automatically reverts to the baseline after the date passes.
+5. **Real currency conversion.** `fx_rates` exists but has 0 rows — every multi-currency total on the
+   page (`totalsByCurrency`, `monthlyOutflow`, the new cash-flow chart) sums **mixed currencies at
+   face value**, disclosed in the UI copy but not actually converted. Populate real AED/LKR/USD rates
+   (fetch live via a free FX API, or let the user set/update them in Settings) and add a toggle or
+   secondary total showing the real converted figure — keep the existing face-value sum too rather
+   than silently replacing it, since some users may prefer seeing raw per-currency numbers.
+6. **Move ENBD Credit Card into `finance_cards` properly** once the user gives its real credit limit
+   and current outstanding balance (asked, not yet answered) — right now it's parked as a generic
+   subscription line, losing the app's existing card-EMI machinery.
+7. **Color coding** — the user explicitly asked for this to follow the existing schema palette. Every
+   new UI from items 1-4 above (Spending Plan banner, unified expense type badges, category chips)
+   should reuse `tailwind.config.ts`'s `accent.{purple,pink,blue,orange,green}` and the existing
+   `BUDGET_STATUS_CLASSES`/`FinanceDeepView.tsx`'s `COLORS` constant — don't introduce new hex values
+   ad hoc per component, keep one source of truth (consider hoisting `COLORS`/`STATUS_HEX` out of
+   `FinanceDeepView.tsx` into `lib/financeUtils.ts` or a new `lib/theme.ts` if more components start
+   needing them).
+
+**Also still open from earlier sessions, lower priority than the above:** RLS penetration audit,
+Cozi-style calendar/lists module (Google Calendar sync is safe to build now under Google's Testing
+mode, same as existing Google sign-in — full verification only needed past 100 test users), Rocket
+Money-style smart alerts/net-worth rollup. Full BACKLOG.md has the checkbox-tracked version.
+
 
 ## Status: Phase 1 of BACKLOG.md shipped — signup, Google login (code done), 2FA, password reset
 Commit `f290ca9`, deploy `dep-da0v87qd0e5s73aud3qg` (confirmed `status:"live"`). Build 0
