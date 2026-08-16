@@ -236,3 +236,75 @@ before going to GitHub, so nothing untested hit the live site.
 - Charts on the dashboard (spending trend line, category donut) were
   flagged earlier as rendering blank in a screenshot — not yet
   investigated, likely just placeholder-data/timing, not a real bug.
+
+## 2026-08-17 — Finance "Deep view" toggle built + build-verified; Shenaal's real finance data pushed to Supabase; NOT YET PUSHED TO GITHUB (need a fresh PAT)
+
+**Context:** picked up from the LifeOS boardroom strategy session
+([[project_hari_lifeos_strategy]] / `LifeOS-Billion-Dollar-Strategy.md`) —
+user asked to start building the Phase 2 "steal from competitors" backlog,
+starting with Simplifi-style deep finance math.
+
+**Built (code written + `next build` verified 0 errors, all 17 routes,
+NOT deployed yet):**
+- `lib/financeUtils.ts`: new `projectMonthlyOutflow()` — real 12-month
+  forward projection of committed outflow (loans drop off when their
+  tenure ends, yearly subs/scheme items land only in their due month and
+  repeat yearly, monthly items recur). Card EMIs deliberately excluded
+  from the projection (cards have no start date to project from).
+- `components/finance/FinanceDeepView.tsx` (new): `CashFlowChart`
+  (12-mo area chart), `SpendCategoryDonut` (loans/cards/subs/schemes split
+  of this month's outflow), `BudgetMeterCard` (hand-rolled SVG gauge,
+  reuses the existing red/orange/green/blue `budgetStatus` logic),
+  `CurrencyBalancesBars` (respects `hideBalances` — shows a placeholder
+  instead of the chart when balances are hidden, doesn't try to blur SVG
+  text). Uses `recharts`, already a dependency, no new npm packages.
+- `app/finance/page.tsx`: added a Standard/Deep toggle (top-right, next to
+  the existing "Balances hidden" pill, state in
+  `localStorage: finance.viewMode`, per-device like `hideBalances`). Deep
+  view adds the 4 charts above the existing Budget/Upcoming/Accounts/etc.
+  sections — nothing about Standard view changed, purely additive.
+
+**Real data pushed directly to Supabase for Shenaal** (per his request —
+he pasted a full financial snapshot from another project and asked me to
+enter it rather than typing it into the UI himself): `finance_income`
+(salary AED 6,902.40/mo), `finance_accounts` (balance snapshot AED 3,842
+as of 6 Aug 2026), `finance_loans` (ENBD Personal Loan — principal
+AED 60,843.94 and 10.74% rate **back-solved exactly** from the given EMI/
+remaining-balance/payments-made, verified the solved numbers reproduce
+the exact AED 33,663.71 remaining balance), `finance_subscriptions` (12
+rows: DEWA, Du Internet, Fuel, Groceries, cooking gas, misc, SLIC
+insurance, ENBD Appliance EMI, ENBD Phone EMI, Car Finance, ENBD Credit
+Card minimum, Tabby baseline), `finance_payment_schemes` (Rent — 2 known
+installments, 14 Sep and 14 Dec 2026, AED 7,333 each). All rows
+`owner_id`=Shenaal's real profile uuid, `visibility='shared_view'` so
+Shalini can see them too.
+
+**Deliberately NOT stored (asked user instead of guessing):** exact
+due-day-of-month for ENBD Personal Loan, Car Finance, ENBD Appliance EMI,
+and ENBD Phone EMI — inserted with a placeholder `billing_day=1` for now.
+Also not stored: the ENBD Credit Card's ~AED 100–120/mo extra interest
+when paying only the minimum (no field for it — `finance_subscriptions`
+has no notes column), and Tabby's temporary ~4-month spike to AED
+900–1,000/mo (baseline AED 400 stored; the spike has no field to attach
+to without risking it being read as permanent). Car insurance renewal
+(paid, AED 1,748.25) and car registration renewal (pending, ~AED 500) are
+one-time costs with no fixed due date given — not stored either.
+
+**Blocked on:** pushing to GitHub / deploying to Render — needs a fresh
+`GITHUB_TOKEN_HARI`-scoped PAT pasted into chat (never persisted, this
+project's standing convention). Also hit a real sandbox disk-space wall
+this session (`/tmp` was 100% full from a previous session's leftover
+work directories that this session doesn't have permission to delete) —
+worked around it by symlinking a previous session's still-readable
+`node_modules` instead of a fresh `npm install`, so the build-verify step
+above is trustworthy, but flagging in case it recurs.
+
+**Next session should:** get the GitHub PAT, push, verify deploy live,
+then ask user for the 4 missing due-days above and update those
+`finance_subscriptions`/`finance_loans` rows' `billing_day`/`next_due_date`
+via SQL (quick, no UI changes needed). After that, next BACKLOG.md Phase 2
+items: Rocket Money-style smart alerts/net-worth rollup, then the Cozi-style
+calendar/lists module (Google Calendar sync is buildable now under Google's
+"Testing" mode with no verification needed, same as the existing Google
+sign-in — full OAuth verification only becomes necessary if the app goes
+public past 100 test users, which is a Phase 3 concern, not a blocker now).

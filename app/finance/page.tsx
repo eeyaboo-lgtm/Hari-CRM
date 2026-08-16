@@ -17,8 +17,10 @@ import {
   formatMoney,
   budgetStatus,
   BUDGET_STATUS_CLASSES,
+  projectMonthlyOutflow,
 } from "@/lib/financeUtils";
-import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle } from "lucide-react";
+import { CashFlowChart, SpendCategoryDonut, BudgetMeterCard, CurrencyBalancesBars } from "@/components/finance/FinanceDeepView";
+import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle, BarChart3, List } from "lucide-react";
 
 type Currency = "AED" | "LKR" | "USD";
 type AccountKind = "credit" | "debit" | "current" | "checking" | "savings" | "bnpl";
@@ -151,6 +153,7 @@ export default function FinancePage() {
   const [schemes, setSchemes] = useSchemesSynced("finance.schemes.v1", DEFAULT_SCHEMES);
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
   const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
+  const [viewMode, setViewMode] = useLocalStorage<"standard" | "deep">("finance.viewMode", "standard");
 
   const [filter, setFilter] = useState<string>("all");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
@@ -188,6 +191,17 @@ export default function FinancePage() {
     schemeMonthlyContribution;
   const status = budgetStatus(monthlyOutflow, budget);
   const statusCls = BUDGET_STATUS_CLASSES[status];
+
+  // Deep view inputs — same figures as monthlyOutflow above, just split by
+  // category instead of summed, plus a 12-month forward projection. Pure
+  // derivations of state already loaded above; no extra fetches.
+  const loansOutflow = fLoans.reduce((sum, l) => sum + calcEMI(l.principal, l.interestRate, l.tenureMonths), 0);
+  const cardsOutflow = fCards.reduce((sum, c) => sum + (c.tenureMonths > 0 ? calcEMI(c.outstanding, c.interestRate, c.tenureMonths) : 0), 0);
+  const subsOutflow = fSubs.reduce((sum, s) => sum + monthlySubCost(s), 0);
+  const cashFlowData = useMemo(
+    () => projectMonthlyOutflow(fLoans, fSubs, fSchemes.flatMap((sc) => sc.items)),
+    [fLoans, fSubs, fSchemes]
+  );
 
   // Upcoming payments (subs + loans + scheme items) within 14 days, soonest first.
   const upcoming = [
@@ -383,6 +397,28 @@ export default function FinancePage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <div className="glass-card flex items-center rounded-full p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setViewMode("standard")}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors ${
+                  viewMode === "standard" ? "bg-accent-purple text-white" : "text-gray-400 hover:text-white"
+                }`}
+                title="Standard view — data entry and lists"
+              >
+                <List size={13} /> Standard
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("deep")}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors ${
+                  viewMode === "deep" ? "bg-accent-purple text-white" : "text-gray-400 hover:text-white"
+                }`}
+                title="Deep view — charts, meters, and projections"
+              >
+                <BarChart3 size={13} /> Deep
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setHideBalances((v) => !v)}
@@ -406,6 +442,20 @@ export default function FinancePage() {
             ))}
           </div>
         </div>
+
+        {/* Deep view — charts/meters built from the same data as Standard view below */}
+        {viewMode === "deep" && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <CashFlowChart data={cashFlowData} />
+            </div>
+            <BudgetMeterCard outflow={monthlyOutflow} budget={budget} status={status} />
+            <SpendCategoryDonut loans={loansOutflow} cards={cardsOutflow} subs={subsOutflow} schemes={schemeMonthlyContribution} />
+            <div className="lg:col-span-2">
+              <CurrencyBalancesBars totals={totalsByCurrency} hideBalances={hideBalances} />
+            </div>
+          </div>
+        )}
 
         {/* Budget status */}
         <section className="glass-card rounded-xl2 p-5">

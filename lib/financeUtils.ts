@@ -91,3 +91,69 @@ export const BUDGET_STATUS_CLASSES: Record<BudgetStatus, { text: string; bg: str
   orange: { text: "text-accent-orange", bg: "bg-accent-orange", ring: "ring-accent-orange/40" },
   red: { text: "text-red-400", bg: "bg-red-500", ring: "ring-red-500/40" },
 };
+
+/**
+ * Simplifi-style "Projected Cash Flow": rolling forward view of committed
+ * monthly outflow, built entirely from data already in Finance (no bank-sync
+ * needed). Real math, not placeholder — loans drop off the month their
+ * tenure ends, yearly subs/scheme items only land in the month they're
+ * actually due (and repeat yearly for subs), monthly items recur every
+ * month. Mixed currencies are summed at face value, matching the existing
+ * "This month's committed outflow" convention elsewhere on the page.
+ * Card EMIs are deliberately excluded here (cards have no start date to
+ * project from, only a tenure length) — they're still included in the
+ * current-month category breakdown via the caller.
+ */
+export type MonthlyProjectionPoint = { month: string; loans: number; subs: number; schemes: number; total: number };
+
+export function projectMonthlyOutflow(
+  loans: { principal: number; interestRate: number; tenureMonths: number; startDate: string }[],
+  subs: { amount: number; taxPct: number; cadence: "monthly" | "yearly"; nextDate: string; tenureMonths: number }[],
+  schemeItems: { amount: number; cadence: SchemeCadenceLike; dueDate: string; paid: boolean }[],
+  monthsAhead = 12
+): MonthlyProjectionPoint[] {
+  const now = new Date();
+  const points: MonthlyProjectionPoint[] = [];
+
+  for (let i = 0; i < monthsAhead; i++) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+
+    const loansTotal = loans.reduce((sum, l) => {
+      if (!l.startDate || !l.tenureMonths) return sum;
+      const start = new Date(l.startDate);
+      const monthsSinceStart = (monthDate.getFullYear() - start.getFullYear()) * 12 + (monthDate.getMonth() - start.getMonth());
+      if (monthsSinceStart < 0 || monthsSinceStart >= l.tenureMonths) return sum;
+      return sum + calcEMI(l.principal, l.interestRate, l.tenureMonths);
+    }, 0);
+
+    const subsTotal = subs.reduce((sum, s) => {
+      const withTax = s.amount * (1 + s.taxPct / 100);
+      if (s.cadence === "monthly") return sum + withTax;
+      if (!s.nextDate) return sum;
+      const due = new Date(s.nextDate);
+      const sameMonth = due.getFullYear() === monthDate.getFullYear() && due.getMonth() === monthDate.getMonth();
+      const sameMonthNextYear = due.getFullYear() + 1 === monthDate.getFullYear() && due.getMonth() === monthDate.getMonth();
+      return sameMonth || sameMonthNextYear ? sum + withTax : sum;
+    }, 0);
+
+    const schemesTotal = schemeItems.reduce((sum, it) => {
+      if (it.paid) return sum;
+      if (it.cadence === "monthly") return sum + it.amount;
+      if (!it.dueDate) return sum;
+      const due = new Date(it.dueDate);
+      return due.getFullYear() === monthDate.getFullYear() && due.getMonth() === monthDate.getMonth() ? sum + it.amount : sum;
+    }, 0);
+
+    points.push({
+      month: monthDate.toLocaleDateString("en-US", { month: "short" }),
+      loans: Math.round(loansTotal),
+      subs: Math.round(subsTotal),
+      schemes: Math.round(schemesTotal),
+      total: Math.round(loansTotal + subsTotal + schemesTotal),
+    });
+  }
+  return points;
+}
+
+// Loosened shape so this file doesn't need to import the page's SchemeCadence type.
+type SchemeCadenceLike = "onetime" | "monthly" | "termly" | "yearly";
