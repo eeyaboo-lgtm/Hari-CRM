@@ -14,6 +14,19 @@ const ALLERGY_STATUS_META: Record<AllergyStatus, { label: string; color: string 
   suspected: { label: "Suspected / likely", color: "bg-accent-orange/15 text-accent-orange border-accent-orange/30" },
   safe: { label: "Tested — safe", color: "bg-accent-green/15 text-accent-green border-accent-green/30" },
 };
+// Bug fixed 2026-08-16: a stray row in the live DB had a non-enum status
+// value ("archived_orphan_test_row", from an earlier session's attempt to
+// flag an orphaned test row without a working notes-column write). Looking
+// up an unrecognized status in ALLERGY_STATUS_META returned undefined, and
+// reading .color/.label off that crashed the ENTIRE Health page render for
+// every user -- not just that one row. This is exactly what looked like
+// "add/save buttons not working" from the outside: the whole page went
+// blank, so nothing on it was interactive. Fallback so an unexpected value
+// degrades to a neutral badge instead of taking the page down.
+const UNKNOWN_ALLERGY_STATUS_META = { label: "Unknown status", color: "bg-white/10 text-gray-400 border-white/10" };
+function allergyStatusMeta(status: AllergyStatus) {
+  return ALLERGY_STATUS_META[status] ?? UNKNOWN_ALLERGY_STATUS_META;
+}
 
 function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -213,7 +226,7 @@ function AllergyCard({
   onRemove: () => void;
 }) {
   const { members } = useHousehold();
-  const meta = ALLERGY_STATUS_META[entry.status];
+  const meta = allergyStatusMeta(entry.status);
   // See the matching comment on MembershipCard: collapses to a compact
   // summary card once it has a trigger name; fields auto-save on every
   // keystroke already, so "Done" just collapses the card.
