@@ -1,4 +1,64 @@
-# Hari-CRM — Session Handover (2026-08-16, latest #11 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-16, latest #12 — READ THIS FIRST)
+
+## Status: all 4 backlog items from #11 shipped, build-verified, pushed, deployed live
+Commit `5c73c70`, deploy `dep-da0t7vdg1s2s73bqa68g` (confirmed `status:"live"`). Build
+0 errors, all 11 routes. Push token was pasted fresh at session start (per usual — nothing
+persisted). Unauthenticated fetch spot-check on `/vision` confirmed no 500 (redirects to
+`/login` as expected). **No real logged-in click-through was done this session** — Claude
+doesn't have and shouldn't be given the household login passcode (never persisted by
+design). Next session or the user should do one real pass: sign in as Shenaal, check all 4
+Finance tabs render, edit a Membership/Allergy/Vision-goal card via the new pencil icon,
+switch Vision board tabs, upload a photo and eyeball that it's smaller / actually WebP.
+
+1. **Finance tabs bug — actual root cause found**, not just re-tested. In
+   `lib/HouseholdContext.tsx`'s `loadRealHousehold()`, the `profiles` roster query's
+   `{ data, error }` only ever read `data`. On a transient fetch error (network blip, RLS
+   hiccup), `data` came back `null` → `rows ?? []` → empty array → `mergeRealMembers()`
+   treated "fetch failed" as "this household has zero other real members" and **wiped**
+   the real member cache down to just non-uuid custom-label extras. Every module renders
+   tabs as `[...members, SHARED]`, so that's exactly "Household + Shared only" — self-heals
+   on the next successful fetch, which is why it looked fine when re-tested live last
+   session. Fixed: only update `members` when the query comes back error-free; an error
+   now means "don't know, keep the existing cache" instead of "empty, wipe it."
+
+2. **Collapse-to-card + edit pattern, everywhere** — the biggest item. Finance's existing
+   pencil-icon/summary-row pattern was already correct and used as the template (no changes
+   there). Two distinct gaps found and fixed:
+   - `MembershipCard`, `AllergyCard`, `InsuranceCard`, `GoalCard` (Vision) were always fully
+     open as a giant form, forever — exactly what you flagged. Each now collapses to a
+     summary once its identifying field (name/trigger/provider/title) is filled, pencil icon
+     to expand, check icon to collapse. Blank/new entries start expanded. No draft/save-cancel
+     needed — these already auto-save every keystroke, so "Done" just toggles a local
+     `editing` boolean.
+   - `ConditionsSection`/`AppointmentsSection` (Health) and Business's idea journal had the
+     opposite problem — **no edit at all**, delete-and-recreate only. Added small row
+     components (`ConditionRow`, `AppointmentRow`, `IdeaRow`) with the same pencil/check
+     toggle, local state per row — same pattern Business's pre-existing `StackRow` already
+     used correctly.
+
+3. **Vision board: individual + shared boards.** `BoardItem` gained `boardId` (real profile
+   uuid, or `"shared"`). Tab selector (same visual pattern as Finance/Memberships) sits above
+   the mood board; new items tag to whichever tab is active; "Clear board" only clears the
+   active board now, not everything. Pre-existing items with no `boardId` migrate to
+   `"shared"` automatically on first load, once. Still 100% localStorage — pure client-side
+   scoping, no Supabase schema touched (that part of the original ask — real cloud sync for
+   the board — is still the separate, bigger `board-images` bucket task below).
+
+4. **WebP compression on photo uploads.** New `compressToWebp()` in
+   `components/VisionBoard.tsx`: downscales to max 1600px on the long edge via an off-screen
+   canvas, re-encodes with `toDataURL("image/webp", 0.82)`, falls back to the original if
+   WebP encoding isn't actually supported (checks the result really starts with
+   `data:image/webp` — some browsers silently give back PNG instead of erroring). Directly
+   addresses the long-standing "~5-10MB localStorage cap" limitation.
+
+**Also surfaced:** `next@14.2.15`'s security advisory is now flagged as **critical** by npm
+(previously just "known") — see nextjs.org/blog/security-update-2025-12-11. Worth a version
+bump soon; still low-urgency for a private household app. NSAID orphan allergy row from #11
+is unchanged — still needs manual delete/reassign via Health → Allergies UI.
+
+---
+
+# Hari-CRM — Session Handover (2026-08-16, latest #11)
 
 ## Status: App confirmed ready for real data. 2 more real bugs found + fixed + deployed live.
 User asked point-blank: is everything saved to Supabase, can they start entering real
