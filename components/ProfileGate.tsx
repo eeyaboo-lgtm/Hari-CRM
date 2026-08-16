@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import { Delete, Lock } from "lucide-react";
 import { useHousehold } from "@/lib/HouseholdContext";
 import PinSetupGate from "@/components/PinSetupGate";
+import { logout } from "@/app/login/actions";
 
 const GRADIENTS = [
   "from-accent-purple to-accent-blue",
@@ -38,6 +39,18 @@ export default function ProfileGate({ children }: { children: React.ReactNode })
   if (activeMember && unlocked) return <>{children}</>;
 
   const needsPin = !!activeMember && !unlocked;
+
+  // Wrong account on a shared device and no way to log out was a real gap
+  // here too — same fix as PinSetupGate (2026-08-16).
+  const signOutInstead = async () => {
+    try {
+      window.localStorage.removeItem("household.members");
+      window.sessionStorage.removeItem("household.activeMemberId");
+      window.sessionStorage.removeItem("household.unlocked");
+      window.localStorage.removeItem("admin.viewingHouseholdId");
+    } catch {}
+    await logout();
+  };
 
   const submitPin = async (value: string) => {
     setBusy(true);
@@ -83,6 +96,9 @@ export default function ProfileGate({ children }: { children: React.ReactNode })
             ))}
           </div>
           <p className="mt-10 text-xs text-gray-600">Manage profiles &amp; PINs from Settings once unlocked.</p>
+          <button type="button" onClick={signOutInstead} className="mt-3 text-xs text-gray-500 hover:text-white">
+            Not your household? Log out
+          </button>
         </>
       ) : (
         <>
@@ -111,6 +127,9 @@ export default function ProfileGate({ children }: { children: React.ReactNode })
           </div>
           <button type="button" onClick={lock} className="mt-8 text-xs text-gray-500 hover:text-white">
             &larr; Choose a different profile
+          </button>
+          <button type="button" onClick={signOutInstead} className="mt-3 text-xs text-gray-500 hover:text-white">
+            Log out instead
           </button>
         </>
       )}

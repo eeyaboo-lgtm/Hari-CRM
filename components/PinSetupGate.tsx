@@ -12,6 +12,7 @@ import { useState } from "react";
 import { Delete } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useHousehold } from "@/lib/HouseholdContext";
+import { logout } from "@/app/login/actions";
 
 export default function PinSetupGate() {
   const { members, selectMember, refreshHousehold, markPinSetupComplete } = useHousehold();
@@ -70,6 +71,22 @@ export default function PinSetupGate() {
 
   const householdLabel = members[0]?.name ?? "your household";
 
+  // This screen is a hard block with nothing else rendered underneath it,
+  // and (until this fix, 2026-08-16) had no way out at all if you landed
+  // here by mistake or on the wrong shared device — no back button, no
+  // logout, nothing. Every full-screen gate in this app should always
+  // leave an escape hatch back to /login.
+  const signOutInstead = async () => {
+    if (busy) return;
+    try {
+      window.localStorage.removeItem("household.members");
+      window.sessionStorage.removeItem("household.activeMemberId");
+      window.sessionStorage.removeItem("household.unlocked");
+      window.localStorage.removeItem("admin.viewingHouseholdId");
+    } catch {}
+    await logout();
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-base-bg px-6">
       <h1 className="mb-2 text-xl font-semibold text-white">
@@ -103,6 +120,9 @@ export default function PinSetupGate() {
           )
         )}
       </div>
+      <button type="button" onClick={signOutInstead} className="mt-8 text-xs text-gray-500 hover:text-white">
+        Not you? Log out
+      </button>
     </div>
   );
 }
