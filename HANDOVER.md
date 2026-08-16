@@ -69,6 +69,34 @@ sign in as Shenaal, check the Spending Plan banner shows red with a real negativ
 his salary is marked recurring, add one test expense of each type (monthly/fixed-term/one-off) and
 confirm it survives a refresh, and try the estimate-range toggle once.
 
+## Also shipped this session — 2 Phase 0 backlog items (user asked for "another simpler task or two" after the Finance work above)
+
+Both live, commits `46bd5ae` + `cc34cc9`, both build-verified 0 errors / 16 routes separately.
+
+1. **Business page: editable project cards.** The 4 project tiles (ShelfPulse/RetailSuite/
+   UnwindCircle/Dino History) were a hardcoded array — the `business_projects` table already existed
+   in the schema (from session #7) but nothing ever wrote to it. Now wired via `useSupabaseSynced`,
+   same pencil/check edit pattern as the rest of the app: hover a card to reveal edit/delete icons,
+   permanent "Add project" card at the end of the grid (name/type/url/notes). The 4 defaults seed the
+   table only the first time it's empty.
+2. **Quick Launch customization.** New `lib/quickLaunch.ts` (shared type + `DEFAULT_QUICK_LAUNCH` +
+   a literal-string color→gradient lookup, imported by both Dashboard and Settings so they can't
+   drift). New Settings section: add/remove shortcuts, pick a color, optionally prefill label+URL
+   from a `business_projects` row via a read-only dropdown. Per-device (`localStorage`), same
+   convention as Finance's `budget`/`hideBalances` — these are UI shortcuts, not shared household
+   data, so no schema table was added for this one.
+
+**Real bug avoided proactively, not caught after the fact this time:** built both of these with the
+literal-string Tailwind-class lookup pattern from the start (see the Expenses-section bug earlier
+in this session and `feedback_tailwind_dynamic_classes` in memory) — Quick Launch's color picker
+and Business's (none needed, no dynamic classes there) were designed around it rather than fixed
+after.
+
+**Not done, disclosed:** no real logged-in click-through of either feature (same standing
+limitation). Next session or the user should: sign in, add/edit/remove a Business project card,
+add a Quick Launch shortcut (try the "prefill from Business project" dropdown), confirm it shows up
+on the Dashboard with the right color, remove it.
+
 ---
 
 # Hari-CRM — Session Handover (2026-08-17, #18)

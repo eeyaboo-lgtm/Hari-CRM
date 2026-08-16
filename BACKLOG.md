@@ -2,9 +2,9 @@
 **Read this at the start of every session — Claude should remind you where we are in this list.** Check items off as they ship; add new ones as they come up. Full context/rationale for each item lives in `LifeOS-Billion-Dollar-Strategy.md`.
 
 ## Phase 0 — Existing polish backlog (pre-dates the strategy session)
-- [ ] Quick Launch customization (pick/add/remove shortcuts via Settings)
+- [x] Quick Launch customization (pick/add/remove shortcuts via Settings, optional Business-project prefill) — `lib/quickLaunch.ts`. Shipped 2026-08-17, commit `cc34cc9`, live.
 - [ ] Consolidated "Upcoming" widget (Renewals + Appointments + Payments + Reminders merged into one)
-- [ ] Business page: editable project cards (add/edit/remove)
+- [x] Business page: editable project cards (add/edit/remove) — wired to the existing `business_projects` table. Shipped 2026-08-17, commit `46bd5ae`, live.
 
 ## Phase 1 — Make it safe/possible for anyone but us to use it
 - [x] **Real signup flow** replacing hand-seeded SQL accounts — `/signup` page (client-side `supabase.auth.signUp()`) + a `handle_new_user_household()` Postgres trigger on `auth.users` insert that atomically creates the `households` + `profiles` rows. Shipped 2026-08-16.
