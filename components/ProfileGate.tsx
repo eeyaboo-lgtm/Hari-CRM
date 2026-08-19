@@ -26,7 +26,10 @@ export default function ProfileGate({ children }: { children: React.ReactNode })
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  if (pathname === "/login") return <>{children}</>;
+  // Legal pages (Privacy/Terms/About/Instructions) are standalone public
+  // pages — readable before signing in, and not part of the household/PIN
+  // flow at all.
+  if (pathname === "/login" || pathname?.startsWith("/legal")) return <>{children}</>;
   if (!ready) return <div className="min-h-screen bg-base-bg" />;
   // Admin already proved identity with a real password at /login — skip the
   // local per-profile PIN layer entirely; they pick which household to view

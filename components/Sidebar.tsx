@@ -2,6 +2,7 @@
 
 import {
   LayoutGrid,
+  CalendarDays,
   HeartPulse,
   Wallet,
   Briefcase,
@@ -16,6 +17,7 @@ import { logout } from "@/app/login/actions";
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutGrid, href: "/dashboard" },
+  { key: "calendar", label: "Calendar", icon: CalendarDays, href: "/calendar" },
   { key: "health", label: "Health & Insurance", icon: HeartPulse, href: "/health" },
   { key: "finance", label: "Finance", icon: Wallet, href: "/finance" },
   { key: "business", label: "Business Projects", icon: Briefcase, href: "/business" },

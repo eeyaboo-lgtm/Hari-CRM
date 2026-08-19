@@ -1,4 +1,72 @@
-# Hari-CRM — Session Handover (2026-08-19, latest #20 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-19, latest #21 — READ THIS FIRST)
+
+## #21 — Real Calendar built + legal pages (Privacy/Terms/About/Instructions) + cookie banner
+
+**What shipped:**
+
+1. **Calendar, for real** (`app/calendar/page.tsx`) — replaces the approved static design preview
+   (`/tmp/calendar_preview.html` from the design-review pass) with actual Supabase-backed code.
+   New table `calendar_events` (migration `calendar_events`, applied live) — same 4-column pattern
+   as every other content table (`owner_id`, `visibility`, `install_household_rls`), always saved
+   with `ownerLocalId: () => "shared"` (mirrored_edit) so any household member can add/edit/remove
+   — this is a shared family calendar, not a per-person private one. Month grid, click a day to see
+   what's happening + add an event, "This month's payments" list, Google Calendar sync shown
+   locked/pending-verification (unchanged intent from the design pass — still blocked on a
+   verified domain + OAuth review). Added to `components/Sidebar.tsx` nav.
+   - **Payments-per-date overlay is read-only here, sourced from Finance's existing localStorage
+     cache** (`lib/calendarPayments.ts` reads `finance.loans.v3` / `finance.subs.v3` /
+     `finance.schemes.v1` — the same cache `useSupabaseSynced` keeps in sync with the real
+     `finance_loans`/`finance_subscriptions`/`finance_payment_schemes` tables, and the same
+     source `components/DashboardLiveWidgets.tsx` already used). **Known scope limit:** shows
+     each bill's single *next* occurrence only (same as the Dashboard's existing behavior), not a
+     full recurring projection painted across every month — flip to a future month and a monthly
+     bill won't repeat there yet. Add/edit bills in Finance, not on the Calendar.
+
+2. **Legal pages** (`app/legal/{privacy,terms,about,instructions}/page.tsx` + shared
+   `components/LegalPageLayout.tsx`) — content adapted from scratch for Hari-CRM's actual data
+   model (health records, financial data, invite-based household accounts, admin backup access),
+   NOT copy-pasted from the user's `LEGAL-TEMPLATE-REUSABLE.md` DinoHistory template. That
+   template explicitly flags itself as insufficient as-is for a project with user accounts or
+   sensitive health/financial data — used it only for the page-shell pattern and the cookie-banner
+   mechanism, wrote the actual legal content fresh. Privacy Policy specifically discloses: what
+   Google/email auth collects, that health/financial data is never monetized, the
+   private/shared/joint visibility model, and — importantly — that the admin can see a household
+   list + export backups (a real, disclosable fact now that admin overview exists). **Not
+   lawyer-reviewed** — flagged in this repo's memory as a known gap if the app ever moves beyond
+   friends-testing into anything resembling a public/commercial launch.
+   - `components/CookieConsent.tsx` — lightweight notice-and-acknowledge banner (not an
+     accept/reject gate, since there's no analytics/ad cookie today to gate — only Supabase's
+     necessary auth-session cookie exists). If analytics is ever added, its script must be gated
+     behind an explicit "accepted" choice here, same pattern as the DinoHistory reference.
+   - `components/LegalFooter.tsx` — link row wired into the public `/login` page (pre-auth) and
+     into Settings (post-auth), so both signed-out and signed-in users can reach these pages.
+   - `components/ProfileGate.tsx` — `/legal/*` added to the same skip-the-household-gate
+     allowlist `/login` already had (standalone public pages, no PIN/profile flow).
+
+3. **Small fix, user-reported mid-session:** Health → Allergy history's "add" box only had
+   Household member + Trigger — Status/Reaction/Date/Notes only appeared after a second "edit"
+   step. Added all fields to the initial add form (`app/health/page.tsx`,
+   `AllergiesSection`/draft form) so everything saves together on first "Add allergy" click; no
+   data-model change, `addEntry()` already carried the full draft.
+
+4. **Not done this session — flagged, not forgotten** (user asked mid-session, answered inline,
+   not built):
+   - **Wearable health sync (Samsung Health / Apple Health / Health Connect).** No free way to
+     pull this into a *web app* directly — HealthKit (iOS) and Health Connect (Android, which
+     Samsung Health/Honor Health can write into) are native-only SDKs, not reachable from a
+     browser. Free path: a companion native/PWA-wrapped app the household installs, or manual
+     CSV/export-then-upload. Paid path: an aggregator like Terra API or Spike API (per-user
+     monthly fee) that normalizes all three sources into one webhook/API Hari-CRM could consume.
+     Real feature, real scope — not attempted this session.
+   - **Optional stock-ticker dashboard widget (Yahoo Finance).** Feasible for free — Yahoo's
+     official RSS feed is gone, but its unofficial JSON quote endpoints
+     (`query1.finance.yahoo.com/...`) still work with no API key, just unsupported/rate-limited
+     and could break without notice. Ties into the existing "Quick Launch is user-customizable"
+     pattern (`lib/quickLaunch.ts`) — a configurable-widgets dashboard (spending trend, "where
+     attention is going", stock ticker as swappable cards) is a real redesign of the Dashboard's
+     fixed layout, not a quick add. Good candidate for its own focused session.
+
+
 
 ## Status: Multi-user household join flow + admin household overview/backup shipped, build-verified clean
 

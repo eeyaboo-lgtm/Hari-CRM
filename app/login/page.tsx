@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { login } from "./actions";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import LegalFooter from "@/components/LegalFooter";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_input: "Enter a valid email and password.",
@@ -17,7 +18,7 @@ export default function LoginPage({
   const errorMessage = searchParams.error ? ERROR_MESSAGES[searchParams.error] : null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-base-bg px-4">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-base-bg px-4 py-10">
       <div className="w-full max-w-sm rounded-xl2 bg-base-panel p-8">
         <div className="mb-6 flex items-center gap-2">
           <div className="h-3 w-3 rounded-sm bg-accent-blue" />
@@ -87,6 +88,7 @@ export default function LoginPage({
           </Link>
         </p>
       </div>
+      <LegalFooter />
     </div>
   );
 }

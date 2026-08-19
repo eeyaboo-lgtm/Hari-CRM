@@ -414,6 +414,48 @@ function AllergiesSection() {
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Status</label>
+            <select
+              value={draft.status}
+              onChange={(e) => setDraft({ ...draft, status: e.target.value as AllergyStatus })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {(Object.keys(ALLERGY_STATUS_META) as AllergyStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {ALLERGY_STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Date noted</label>
+            <input
+              type="date"
+              value={draft.date}
+              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
+            <input
+              value={draft.reaction}
+              onChange={(e) => setDraft({ ...draft, reaction: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && addEntry()}
+              placeholder="e.g. Hives, swelling, no reaction after trial dose"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-gray-500">Notes</label>
+            <input
+              value={draft.notes}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              placeholder="Context — how it was tried, dosage, doctor advice..."
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -423,7 +465,7 @@ function AllergiesSection() {
         >
           <Plus size={14} /> Add allergy
         </button>
-        <p className="mt-2 text-xs text-gray-600">Saved once you click Add — set status, reaction and notes on the card below afterward.</p>
+        <p className="mt-2 text-xs text-gray-600">All fields save together when you click Add — edit any of them again later from the card below.</p>
       </div>
 
       <div className="relative z-10 space-y-3">

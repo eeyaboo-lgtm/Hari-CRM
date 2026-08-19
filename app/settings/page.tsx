@@ -11,6 +11,7 @@ import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions"
 import TwoFactorSettings from "@/components/TwoFactorSettings";
 import HouseholdInvites from "@/components/HouseholdInvites";
 import AdminHouseholdOverview from "@/components/AdminHouseholdOverview";
+import LegalFooter from "@/components/LegalFooter";
 import { Bell, Building2, Check, Key, Lock, Plus, Rocket, RotateCcw, Trash2, Users } from "lucide-react";
 import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_SWATCH, type QuickLaunchColor, type QuickLaunchItem } from "@/lib/quickLaunch";
 
@@ -602,6 +603,8 @@ export default function SettingsPage() {
         </section>
 
         <TwoFactorSettings />
+
+        <LegalFooter className="justify-center pt-2" />
       </main>
     </div>
   );

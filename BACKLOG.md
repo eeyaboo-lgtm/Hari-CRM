@@ -16,7 +16,11 @@
 - [ ] Retire the shared-login pattern (Natasha & Arun) in favor of per-person accounts once real signup exists — shared logins don't scale past our own household
 
 ## Phase 2 — Differentiate (steal the good, skip the bad, per competitor research)
-- [ ] **Cozi-style core**: shared color-coded calendar, meal planning → shopping list, real-time multi-device sync, unified activity feed
+- [x] **Cozi-style shared calendar** — `app/calendar/page.tsx`, real `calendar_events` table (shared/mirrored_edit, any household member can add/edit/remove), payments-per-date pulled from Finance's existing bill data, Google Calendar sync shown locked/pending-verification. Shipped 2026-08-19, `HANDOVER.md` #21. Still open from the original Cozi wishlist: meal planning → shopping list, real-time multi-device sync (no live-refresh yet, just re-fetch), unified activity feed.
+- [ ] Calendar: recurring bills currently show only their *next* occurrence, not repeated across every future month you scroll to (`lib/calendarPayments.ts`) — fine for "what's due soon", not a full projection.
+- [x] **Legal pages** — Privacy Policy / Terms of Use / About / Instructions for Use (`app/legal/*`) + GDPR-style cookie notice (`components/CookieConsent.tsx`), linked from `/login` and Settings. Content written fresh for Hari-CRM's real data model (health/finance/household invites/admin backup access), not lawyer-reviewed. Shipped 2026-08-19, `HANDOVER.md` #21.
+- [ ] **Wearable health sync** (Samsung Health / Apple Health / Health Connect) — no free direct-to-browser path; needs either a native/PWA companion app (free) or a paid aggregator like Terra API/Spike API (per-user monthly fee). Not started — user asked 2026-08-19, see `HANDOVER.md` #21.
+- [ ] **Configurable dashboard widgets** (swap in a stock-ticker card via Yahoo Finance's free-but-unofficial JSON endpoints, alongside spending trend / "where attention is going") — real redesign of the Dashboard's fixed layout, not a quick add. User asked 2026-08-19, see `HANDOVER.md` #21.
 - [x] Finance **Standard/Deep view toggle** + 12-month Projected Cash Flow chart, spend-category donut, budget gauge, currency bars — shipped 2026-08-17, commit `76ec81c`, live.
 - [x] **Spending Plan**: real-time safe-to-spend (income − committed outflow, live, red when negative), real recurring-income concept on `finance_income`. Shipped 2026-08-17, commit `8bbb258`, live — see `HANDOVER.md` #19.
 - [ ] Pinnable Watchlists
