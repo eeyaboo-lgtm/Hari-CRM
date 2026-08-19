@@ -308,3 +308,17 @@ calendar/lists module (Google Calendar sync is buildable now under Google's
 "Testing" mode with no verification needed, same as the existing Google
 sign-in — full OAuth verification only becomes necessary if the app goes
 public past 100 test users, which is a Phase 3 concern, not a blocker now).
+
+## 2026-08-19 — Multi-user household invites + admin household overview/backup
+
+Live household model gained: `households.owner_id` (head role), `household_invites` table +
+`redeem_household_invite()` RPC (invite-code join flow, so a second real person can join with
+their own Google/email login instead of only the shared-PIN model), a hardening trigger closing
+a latent household_id self-edit gap, `components/HouseholdInvites.tsx` (Settings UI for the
+head to generate/revoke codes), `app/join/page.tsx` (redemption entry point), and
+`components/AdminHouseholdOverview.tsx` + `backupHousehold()` (admin-only household list +
+downloadable JSON backup per household). Full detail in `HANDOVER.md` #20 — read that first.
+
+Deliberately not done yet: restore-from-backup UI (design decided, not built), the actual
+Finance-page privacy toggle (the underlying `ownerMap.resolveOwner()` never emits `private` today
+— real gap found this session, plumbing fix designed but not wired into the Finance UI).

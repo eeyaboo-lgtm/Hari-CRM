@@ -342,3 +342,46 @@ $$;
 -- Create two PRIVATE buckets: 'health-documents' and 'board-images'.
 -- Never make them public. Access only via short-lived signed URLs generated
 -- server-side after an RLS-backed ownership check.
+
+-- ============================================================
+-- NOTE (2026-08-19): everything above this line describes the ORIGINAL
+-- 2-person household schema and is known stale — the live database has
+-- since gone through a multi-household rewrite (see migrations
+-- `multi_household_support`, `signup_auto_household_trigger`, and others
+-- via `list_migrations`). The live DB, introspected directly via the
+-- Supabase MCP tools, is the actual source of truth, not this file.
+-- Full reconciliation of this file is out of scope for this pass — only
+-- appending what changed THIS session below, per the project's own
+-- "append, don't silently overwrite" handoff convention.
+-- ============================================================
+
+-- ============================================================
+-- Household invites + head role (2026-08-19, migration
+-- household_invites_and_head_role — see HANDOVER.md #20)
+-- ============================================================
+
+alter table households add column if not exists owner_id uuid references profiles(id);
+
+create table if not exists household_invites (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  code text not null unique default upper(substr(md5(random()::text || clock_timestamp()::text), 1, 8)),
+  created_by uuid not null references profiles(id),
+  max_uses int not null default 1,
+  uses_count int not null default 0,
+  expires_at timestamptz,
+  revoked boolean not null default false,
+  created_at timestamptz not null default now()
+);
+-- RLS: select -> any household member (is_admin() or household_id = current_household_id());
+-- insert/update -> only the household's owner_id (the "head"), or admin.
+-- See the live migration (list_migrations / apply_migration history) for exact policy SQL —
+-- not duplicated here to avoid this file drifting from the DB a second time.
+
+-- redeem_household_invite(p_code text) returns uuid — SECURITY DEFINER. The only sanctioned way
+-- (besides admin) to change a profile's household_id. Validates the code, moves auth.uid()'s own
+-- profile only, best-effort deletes the old household if left with zero members.
+
+-- prevent_direct_household_change() — BEFORE UPDATE trigger on profiles. Blocks a user from
+-- self-editing household_id via the normal profiles_update policy; bypassed only by admin or by
+-- redeem_household_invite() (via a transaction-local `app.allow_household_change` flag).

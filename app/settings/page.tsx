@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/client";
 import { setAdminViewingHousehold, getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
 import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions";
 import TwoFactorSettings from "@/components/TwoFactorSettings";
+import HouseholdInvites from "@/components/HouseholdInvites";
+import AdminHouseholdOverview from "@/components/AdminHouseholdOverview";
 import { Bell, Building2, Check, Key, Lock, Plus, Rocket, RotateCcw, Trash2, Users } from "lucide-react";
 import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_SWATCH, type QuickLaunchColor, type QuickLaunchItem } from "@/lib/quickLaunch";
 
@@ -396,7 +398,7 @@ function SignInCredentialManager() {
 }
 
 export default function SettingsPage() {
-  const { members, addMember, removeMember, renameMember, isAdmin } = useHousehold();
+  const { members, addMember, removeMember, renameMember, isAdmin, householdId } = useHousehold();
   const [newName, setNewName] = useState("");
   const [notif, setNotif] = useLocalStorage<Notif>("notificationPrefs", {
     emailReminders: true,
@@ -430,7 +432,9 @@ export default function SettingsPage() {
 
         {isAdmin && <AdminHouseholdSwitcher />}
         {isAdmin && <AdminAccountRecovery />}
+        {isAdmin && <AdminHouseholdOverview />}
         {!isAdmin && <SignInCredentialManager />}
+        {!isAdmin && householdId && <HouseholdInvites householdId={householdId} />}
 
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 font-medium text-white">Appearance</h2>

@@ -1,3 +1,92 @@
+# Hari-CRM — Session Handover (2026-08-19, latest #20 — READ THIS FIRST)
+
+## Status: Multi-user household join flow + admin household overview/backup shipped, build-verified clean
+
+**Live once pushed+deployed:** built from a fresh `git clone` in this session (not the mounted
+workspace folder — see [[feedback_workspace_drift]]), `npm run build` — 0 errors, 19 routes
+(new `/join`). `git diff --stat` against `origin/main` before committing showed only the files
+intentionally touched this session — no drift.
+
+**Why this session happened:** user's two close friends want to use Hari-CRM as real test users.
+Surfaced a real gap: the only way to have multiple people in one household was the shared-login
+Netflix-PIN model — there was no way for a second person to join with their OWN Google/email
+account. Also added: household-level "head" role, and an admin household overview + JSON backup
+(for pre-reset safety / future host migration).
+
+**What shipped:**
+
+1. **Invite-code join flow.** New Postgres migration `household_invites_and_head_role` (applied
+   live via `apply_migration`, not just written to schema.sql):
+   - `households.owner_id` — the household's "head" (backfilled to each household's
+     earliest-created profile).
+   - `household_invites` table (code, max_uses/uses_count, revoked, expires_at) — RLS: any
+     household member can see their household's invites, only the head (or admin) can create/revoke.
+   - `redeem_household_invite(p_code)` — SECURITY DEFINER function, the ONLY sanctioned way
+     (besides admin) to move a profile's `household_id`. Validates the code, moves the CALLING
+     user's own profile only, best-effort deletes the old household if it's now empty (handles the
+     "just signed up, got a throwaway solo household, now joining a real one" case cleanly).
+   - Hardening: a `BEFORE UPDATE` trigger (`prevent_direct_household_change`) now blocks a user
+     from self-editing their own `household_id` directly through the normal `profiles_update` RLS
+     policy (which previously allowed it — a latent gap, since a guessed/leaked household UUID
+     could have bypassed the invite system entirely). The redeem function sets a transaction-local
+     `app.allow_household_change` flag to get through its own trigger.
+   - `components/HouseholdInvites.tsx` — Settings card (household members, non-admin) to generate/
+     copy/revoke invite codes. Only the head sees the "generate" controls; any member can see
+     pending codes (matches the RLS).
+   - `app/join/page.tsx` — new page. Handles both "already signed in, just paste the code" and
+     "not signed in yet" (Google button or a mini email+password form), by reusing the EXISTING
+     `next=` passthrough already built into `GoogleSignInButton` + `/auth/callback` — no changes
+     needed to signup, login, or the OAuth callback route. `?code=X&auto=1` round-trips through
+     the whole auth chain and auto-redeems on landing.
+   - **Known limitation, intentional for v1:** if someone who ALREADY has real data joins a
+     different household via a code, their existing content rows stay keyed to their own
+     `owner_id` and just follow them (visibility recalculates against the new household). Fine for
+     brand-new test accounts (the actual use case right now); flag to the user if this ever comes
+     up for an existing account.
+
+2. **Admin household overview.** `AdminHouseholdOverview.tsx` (Settings, admin-only): every
+   household, member count, head's name, last-sign-in-anyone (`auth.admin.listUsers()` +
+   `profiles`), and a one-click **JSON backup** button (`backupHousehold()` in
+   `app/settings/actions.ts` — exports household + profiles + all 21 owner-scoped tables, browser
+   download, no server storage yet).
+
+3. **NOT done this session (scoped out on purpose, not forgotten):**
+   - **Restore from a backup JSON.** Design is decided (admin-only, validate shape, scoped
+     delete+reinsert by `owner_id`, typed confirmation before running) but not built — export-first
+     so real backups exist before anyone needs the destructive half. This is the very next piece.
+   - **Finance page privacy toggle.** Real discovery this session: `lib/supabase/ownerMap.ts`'s
+     `resolveOwner()` currently only ever produces `shared_view` (item assigned to a real member) or
+     `mirrored_edit` (assigned to "shared") — it NEVER emits `private`, even though the DB column
+     defaults to `private` and the visibility enum supports it. In practice today, every
+     Finance/Health/etc. entry assigned to a specific person is already visible to the whole
+     household — there's no way for a user to actually keep an item to themselves yet. Fixing this
+     properly means extending `resolveOwner`/`useSupabaseSynced` with an explicit "keep private"
+     flag (backward compatible — existing call sites unaffected) and wiring an actual toggle into
+     the Finance UI (salary/income, loans, card balances were the ones asked about). Didn't touch
+     `finance/page.tsx` (105KB, never fully read this session) blind under time pressure — safer to
+     do this as its own focused pass with the design above already worked out.
+   - **Supabase's native backups.** Couldn't check the project's billing plan / PITR status from
+     available tools — ask the user to check the Supabase dashboard billing page directly.
+
+4. **Also worth knowing:** `npm install` flagged Next.js 14.2.15 has a disclosed security
+   advisory with a patched-version upgrade available (https://nextjs.org/blog/security-update-2025-12-11)
+   — not touched this session (out of scope), but worth a deliberate upgrade pass at some point.
+
+## Notes for next session
+- Same fresh-clone + build-verify + `git diff --stat` workflow as prior sessions — this session
+  had live GitHub push access via the session's own proxy-injected credential (no PAT paste
+  needed this time; if that's not available next time, fall back to the PAT-paste workflow below).
+- Test plan for the invite flow once deployed: generate a code from Settings as an existing
+  household member, have a friend open `/join?code=...`, sign in with THEIR OWN Google account,
+  confirm they land in the same household (not a new one) and can't see anything private to
+  others. Confirm the OLD throwaway household created by their initial sign-up actually got
+  cleaned up (`select count(*) from households where id = '<old id>'` should return 0).
+- Next concrete pieces, in priority order: (1) Finance privacy toggle — plumbing design above,
+  (2) Restore-from-backup UI, (3) actually verify the invite flow live with a real second Google
+  account once deployed (couldn't do this from the cloud sandbox — needs the user's own test).
+
+---
+
 # Hari-CRM — Session Handover (2026-08-17, latest #19 — READ THIS FIRST)
 
 ## Status: All 6 of #18's items shipped & live (items 1,2,3,4,5,7) — item 6 still blocked on user data
