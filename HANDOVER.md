@@ -1,4 +1,42 @@
-# Hari-CRM — Session Handover (2026-08-19, latest #21 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-19, latest #22 — READ THIS FIRST)
+
+## #22 — Favicon shipped + full UI/feature suggestions doc (no code features built, review session)
+
+**Confirmed #21's work is live**: `e52133f` ("Policies and Terms, Legal and Cookies") is on
+`origin/main` — the user committed/pushed last session's local delivery themselves. Re-tested
+`git push` from this sandbox with a fresh PAT the user pasted mid-session: still 403s from the
+sandbox's git proxy ("not in this session's authorized repository set"), now confirmed across two
+separate sessions — stop re-testing this per-session, go straight to the local-delivery fallback
+(see `feedback_git_push_proxy_block` in Claude's memory).
+
+**Favicon**: new browser-tab icon built from the app's own existing brand mark — the blue
+rounded-square / pink circle / orange triangle glyph already used in `Sidebar.tsx` and the
+login/signup/join pages — not a new logo. Source at `public/brand-mark.svg`, rendered via
+`rsvg-convert` into Next.js's App Router icon convention: `app/favicon.ico`, `app/icon.png`,
+`app/apple-icon.png`. Build-verified 0 errors, 26 routes, favicon confirmed present in
+`.next/server/app/`. Delivered to this folder — needs a commit+push via GitHub Desktop like any
+other session's output.
+
+**Suggestions doc**: `HARI-CRM-SUGGESTIONS-2026-08-19.md` in this folder — a full review of the
+current UI/features against what's still missing, written after studying every module's actual
+code (not just BACKLOG.md). Covers: 3 necessary changes (Health has no fitness/activity tracking
+at all — biggest single gap; Dashboard's "Quick add" button is still a dead placeholder since
+session #6; the admin JSON backup has no restore path), 4 more suggestions (global search/Cmd+K,
+smart push/email alerts built on Finance's already-computed budget data, receipts/documents
+attachable to any record not just Insurance, shareable read-only snapshot links), a fitness
+section modeled on what disciplined athletes track (calorie/macro counter, diet/intolerance
+profile extending the existing Allergy history, recipe library + meal-prep → shopping list,
+supplement/medication tracker — currently a total gap, workout log, sleep/RHR/hydration/weight —
+all loggable by hand, no wearable required), 3 highest-conviction new ideas (a "Today" one-screen
+briefing across all modules as the retention hook; medication/supplement adherence reminders;
+proactive renewal/bill safety-net alerts), and 5 free integrations verified this session (Open
+Food Facts API, Spoonacular's free 50-requests/day tier, Frankfurter.app for auto-refreshing
+`fx_rates` instead of hand-seeding, Open-Meteo for a free weather widget, Google Calendar sync —
+already scaffolded, just needs OAuth verification). **Nothing in that doc is built yet** — it's a
+menu for the user to pick from, not something already queued. If they pick items, add them to
+`BACKLOG.md` before starting any of them.
+
+---
 
 ## #21 — Real Calendar built + legal pages (Privacy/Terms/About/Instructions) + cookie banner
 
