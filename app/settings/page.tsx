@@ -7,7 +7,7 @@ import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { createClient } from "@/lib/supabase/client";
 import { setAdminViewingHousehold, getAdminViewingHouseholdId } from "@/lib/supabase/ownerMap";
-import { adminResetPassword, listHouseholdLogins } from "@/app/settings/actions";
+import { adminResetPassword, listHouseholdLogins, setHouseholdAlertsEmail } from "@/app/settings/actions";
 import TwoFactorSettings from "@/components/TwoFactorSettings";
 import HouseholdInvites from "@/components/HouseholdInvites";
 import AdminHouseholdOverview from "@/components/AdminHouseholdOverview";
@@ -407,7 +407,30 @@ export default function SettingsPage() {
     weeklyDigest: true,
   });
 
-  const toggle = (key: keyof Notif) => setNotif((prev) => ({ ...prev, [key]: !prev[key] }));
+  // "Email reminders" is the one row in this section with a real backend
+  // now (2026-08-19) — app/api/alerts/notify/route.ts reads this same
+  // households.alerts_email_enabled column. Load the real value on mount so
+  // the switch doesn't lie about what's actually turned on server-side; the
+  // other two rows (browser alerts, weekly digest) are still local-only
+  // preferences, unchanged.
+  useEffect(() => {
+    if (!householdId) return;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.from("households").select("alerts_email_enabled").eq("id", householdId).single();
+      if (data) setNotif((prev) => ({ ...prev, emailReminders: !!data.alerts_email_enabled }));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId]);
+
+  const toggle = async (key: keyof Notif) => {
+    const next = !notif[key];
+    setNotif((prev) => ({ ...prev, [key]: next }));
+    if (key === "emailReminders") {
+      const result = await setHouseholdAlertsEmail(next);
+      if (!result.ok) setNotif((prev) => ({ ...prev, emailReminders: !next }));
+    }
+  };
 
   // Quick Launch customization (Phase 0 backlog) — per-device shortcut list
   // shown on the Dashboard. See lib/quickLaunch.ts for the shared type.
@@ -577,7 +600,9 @@ export default function SettingsPage() {
             <Bell size={16} className="text-accent-blue" /> Notifications
           </h2>
           <p className="relative z-10 mb-4 text-sm text-gray-400">
-            Preferences save now — actual delivery goes live once the backend is wired up.
+            Email reminders are real — bills/subscriptions due in 3 days, active price overrides, and membership
+            renewals in 14 days, sent daily once this repo's Resend + cron setup is finished (see HANDOVER.md).
+            Browser alerts and weekly digest are still preferences only, not wired to delivery yet.
           </p>
           <div className="relative z-10 space-y-3">
             {NOTIF_ROWS.map(([key, label]) => (

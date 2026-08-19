@@ -1,4 +1,82 @@
-# Hari-CRM — Session Handover (2026-08-19, latest #22 — READ THIS FIRST)
+# Hari-CRM — Session Handover (2026-08-19, latest #23 — READ THIS FIRST)
+
+## #23 — All 4 items from #22's suggestions doc shipped same session (user said "execute one by one without delay")
+User picked 4 items straight off `HARI-CRM-SUGGESTIONS-2026-08-19.md` (below) and said to queue them as
+a roadmap and start executing immediately, no back-and-forth between items. All 4 done, build-verified
+together at the end (`npx tsc --noEmit` clean, `npm run build` 0 errors, 28 routes). Full detail also
+written to `BACKLOG.md`'s new "2026-08-19 roadmap" section — read that for the checklist view, this
+section for the reasoning.
+
+**1. Dead buttons/placeholders fixed** (audited by grepping the codebase's own "TODO/not implemented"
+comments — found exactly what was self-flagged, no more, no less):
+- Dashboard's "Quick add" button (dead since session #6, zero onClick) → `components/QuickAddModal.tsx`,
+  a real launcher into each module's already-visible add form.
+- Admin JSON backup had export but explicitly no restore (`app/settings/actions.ts` had a comment saying
+  so). Added `restoreHousehold()` — admin-only, re-fetches the household's CURRENT member ids server-side
+  (never trusts the uploaded file's claims), scoped delete+reinsert per table, any row whose owner_id
+  isn't a real current member is silently dropped. UI in `AdminHouseholdOverview.tsx` requires typing the
+  household's exact name before the button unlocks — this is a destructive operation, guarded accordingly.
+- Dashboard's "Spending trend" line chart and "Where attention is going" donut were 100% hardcoded fake
+  numbers that never changed (literal comment: "Placeholder data"). There's no per-month transaction
+  ledger yet, so a true *historical* trend isn't honestly computable — instead both now reuse Finance Deep
+  View's own `projectMonthlyOutflow()` (same function, same disclosed mixed-currency-at-face-value
+  convention) for a real, clearly-labeled forward projection (`useSpendingTrend`/`useSpendingCategorySplit`
+  in `components/DashboardLiveWidgets.tsx`). Chart components (`components/charts/SnapshotChart.tsx`,
+  `CategoryDonut.tsx`) now take a `data` prop instead of owning fake data internally.
+- Settings' "Email reminders" toggle had a comment admitting "Preferences save now — actual delivery goes
+  live once the backend is wired up." Now wired for real — see item 4 below.
+
+**2. Global search / Cmd+K** — `components/GlobalSearch.tsx`, mounted once in `app/layout.tsx` (inside
+`ProfileGate` so it only renders once past the household gate, same place `CookieConsent` sits outside
+it). Reads the same localStorage caches every module's own page already reads (`useSupabaseSynced` keeps
+them in sync with Supabase) — zero new fetches. Indexes Finance (accounts/cards/loans/subs/schemes+items/
+income/expenses), Health (conditions/allergies/appointments/insurance), Fitness (measurements), Business
+(ideas/stack/projects), Memberships, Calendar events, and Vision goals. Click a result → navigates to that
+module's page (no per-record deep links exist app-wide except Vision trips, so this matches the app's
+actual routing rather than pretending otherwise).
+
+**3. Fitness section** — new top-level `/fitness` page + Sidebar entry (between Health and Finance), new
+Supabase tables `health_body_metrics` and `health_cycle_logs` (migration
+`fitness_body_metrics_and_cycle_logs`, applied live against `pfchzkcteymiigsdokeo`, same
+`install_household_rls()` convention as everything else, `get_advisors` clean). Three pieces:
+- **BMI calculator** — standalone, defaults from the active member's latest measurement log entry if one
+  exists, otherwise blank. Shows category (Underweight/Healthy/Overweight/Obese) with a disclaimer that
+  BMI is a screening tool, not a diagnosis.
+- **Body measurements history log** — weight, height, body fat %, waist/chest/hips/arm/thigh, resting HR,
+  notes, per member, full add/edit/delete (pencil/check card pattern, same as every other module).
+- **Cycle tracker** (Flo-style) — daily flow/symptoms/mood/notes log, available to any household member
+  (not gender-gated). Real calendar-based predictions in `lib/fitnessUtils.ts` (`predictCycle()`): average
+  cycle length from logged period starts, current cycle day, predicted next period, ovulation estimate
+  (14 days before predicted next start), fertile window (5 days before ovulation to 1 day after). Falls
+  back to a 28-day default (clearly labeled as such) until 2+ real cycles are logged. **Hand-verified**
+  this session with a synthetic 3-cycle/28-day test dataset compiled and run via `node` — output matched
+  expected values exactly (cycle day, next start, ovulation, fertile window all correct).
+
+**4. Smart alerts** — the in-app half is real and live today: `components/AlertsBanner.tsx` on the
+Dashboard (above the hero card) computes budget-over-limit, bills due within 3 days, active elevated-
+subscription overrides, and membership/insurance renewals within 14 days — all from data already in
+localStorage, zero new fetches (`lib/alertsUtils.ts` holds the actual rules as pure functions, deliberately
+shaped to be reusable server-side too, not coupled to localStorage). The **email** half is real,
+build-verified code that cannot do anything yet: `app/api/alerts/notify/route.ts` (protected by
+`ALERTS_CRON_SECRET`, meant to be hit by a free external cron since Render has no built-in scheduler),
+`lib/resend.ts` (plain fetch to Resend's API, no SDK dependency), new `households.alerts_email_enabled`
+opt-in column (migration `households_alerts_email_opt_in`, off by default) wired to Settings' now-real
+"Email reminders" toggle via a new server action `setHouseholdAlertsEmail()` (households_write RLS is
+admin-only — confirmed via `pg_policy` this session — so this goes through the admin client after
+re-verifying the caller's own household_id, same shape as `adminResetPassword`, just without the
+`is_admin` requirement since it's a low-stakes shared preference). **3 manual steps still needed before
+any email actually sends** — a free Resend account + a domain you control verified with them, 3 Render
+env vars, and a free external cron hitting the endpoint daily. Full steps in `BACKLOG.md`. The route
+safely no-ops (returns "not configured") until those are done — deploying it early is not a risk.
+Deliberately NOT included server-side: budget-status alerts (the monthly budget figure is
+`localStorage`-only by existing app design, not something this session changed) and Health Insurance
+renewals (Insurance is still local-only, no Supabase table — see Health page's own comment). Both remain
+visible in the in-app `AlertsBanner` since that reads localStorage directly.
+
+**Favicon note**: session #22 delivered new favicon/icon files to this folder but they were not yet
+committed as of this session's start — bundled into this session's delivery, no separate action needed.
+
+---
 
 ## #22 — Favicon shipped + full UI/feature suggestions doc (no code features built, review session)
 

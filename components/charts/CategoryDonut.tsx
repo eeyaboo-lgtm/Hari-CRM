@@ -2,16 +2,16 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
-// Placeholder split across life segments — swap for a real aggregate query
-// (e.g. % of open action items per segment) once modules are live.
-const data = [
-  { name: "Finance", value: 45, color: "#38bdf8" },
-  { name: "Health", value: 25, color: "#f472b6" },
-  { name: "Business", value: 20, color: "#7c6cf6" },
-  { name: "Other", value: 10, color: "#34d399" },
-];
+export type CategorySlice = { name: string; value: number; color: string };
 
-export default function CategoryDonut() {
+export default function CategoryDonut({ data }: { data: CategorySlice[] }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex h-[200px] items-center justify-center text-center text-xs text-gray-500">
+        No committed spending yet — add loans, subscriptions, or payment schemes in Finance.
+      </div>
+    );
+  }
   return (
     <div className="relative">
       <ResponsiveContainer width="100%" height={200}>
@@ -34,6 +34,7 @@ export default function CategoryDonut() {
         <span className="text-2xl font-semibold text-white">
           {data[0].value}%
         </span>
+        <span className="text-[10px] text-gray-500">{data[0].name}</span>
       </div>
     </div>
   );

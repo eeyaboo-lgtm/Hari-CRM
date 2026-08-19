@@ -2,18 +2,16 @@
 
 import { LineChart, Line, XAxis, ResponsiveContainer, Tooltip } from "recharts";
 
-// Placeholder data — swap for a real query against finance_transactions
-// (grouped by month) once the Supabase project is live.
-const data = [
-  { month: "Mar", value: 4200 },
-  { month: "Apr", value: 9800 },
-  { month: "May", value: 3100 },
-  { month: "Jun", value: 8600 },
-  { month: "Jul", value: 6200 },
-  { month: "Aug", value: 7100 },
-];
+export type SnapshotPoint = { month: string; value: number };
 
-export default function SnapshotChart() {
+export default function SnapshotChart({ data }: { data: SnapshotPoint[] }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex h-[160px] items-center justify-center text-xs text-gray-500">
+        No recurring bills yet — add loans/subscriptions in Finance to see a projection here.
+      </div>
+    );
+  }
   return (
     <ResponsiveContainer width="100%" height={160}>
       <LineChart data={data}>

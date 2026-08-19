@@ -104,6 +104,9 @@ const HOUSEHOLD_DATA_TABLES = [
   "board_items",
   "memberships",
   "vision_goals",
+  "calendar_events",
+  "health_body_metrics",
+  "health_cycle_logs",
 ] as const;
 
 export type HouseholdOverviewRow = {
@@ -211,8 +214,99 @@ export async function backupHousehold(
   }
 }
 
-// Restore is intentionally NOT implemented yet — see HANDOVER.md "Next up"
-// for the design (validate shape, admin-only, scoped delete+reinsert per
-// table keyed by owner_id, typed confirmation before running). Shipping
-// export first so real backups exist; the destructive half is next, not
-// skipped by accident.
+// Restore — counterpart to backupHousehold above. Admin-only, and
+// deliberately narrow: it only ever touches the CURRENT members of the
+// target household (re-fetched from `profiles` here, never trusted from
+// the uploaded file) and only the content tables in HOUSEHOLD_DATA_TABLES.
+// It does not recreate households/profiles/auth users — restore is for
+// recovering lost content on a household that still exists, not for
+// reconstructing a deleted household from scratch. Any row in the snapshot
+// whose owner_id isn't one of the current household's real member ids is
+// silently dropped rather than inserted, so an old/mismatched file can
+// never leak data into the wrong household. The client requires the admin
+// to type the household's exact name before calling this — see
+// AdminHouseholdOverview.tsx.
+export async function restoreHousehold(
+  householdId: string,
+  snapshot: Record<string, unknown>
+): Promise<{ ok: true; restored: Record<string, number> } | { ok: false; error: string }> {
+  try {
+    await requireAdmin();
+
+    const meta = snapshot?._meta as { schemaVersion?: number } | undefined;
+    if (!meta || meta.schemaVersion !== 1) {
+      return { ok: false, error: "This file doesn't look like a Hari-CRM backup (missing/unrecognized _meta.schemaVersion)." };
+    }
+
+    const admin = createAdminClient();
+
+    const { data: household, error: hErr } = await admin
+      .from("households")
+      .select("id, name")
+      .eq("id", householdId)
+      .single();
+    if (hErr || !household) return { ok: false, error: "Household not found" };
+
+    const { data: profiles } = await admin.from("profiles").select("id").eq("household_id", householdId);
+    const memberIds = (profiles ?? []).map((p: any) => p.id);
+    if (memberIds.length === 0) {
+      return { ok: false, error: "This household has no members to restore data against." };
+    }
+
+    const restored: Record<string, number> = {};
+    for (const table of HOUSEHOLD_DATA_TABLES) {
+      const rows = Array.isArray(snapshot[table]) ? (snapshot[table] as Record<string, unknown>[]) : [];
+      // Only rows whose owner_id belongs to a CURRENT member of this household —
+      // never trust the file's own household/owner claims beyond that check.
+      const safeRows = rows.filter((r) => typeof r.owner_id === "string" && memberIds.includes(r.owner_id));
+
+      const { error: delErr } = await admin.from(table).delete().in("owner_id", memberIds);
+      if (delErr) {
+        restored[table] = -1; // signals "failed", surfaced to the admin below
+        continue;
+      }
+
+      if (safeRows.length > 0) {
+        const { error: insErr } = await admin.from(table).insert(safeRows);
+        if (insErr) {
+          restored[table] = -1;
+          continue;
+        }
+      }
+      restored[table] = safeRows.length;
+    }
+
+    return { ok: true, restored };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Restore failed" };
+  }
+}
+
+// ============================================================
+// Smart alerts: household email opt-in (2026-08-19)
+// households_write RLS is admin-only (confirmed via pg_policy), so any
+// signed-in member toggling this for their OWN household needs to go
+// through the admin client after re-checking their own household_id —
+// same "bypass RLS deliberately, but re-verify server-side" shape as
+// adminResetPassword, just without the is_admin requirement since this is
+// a low-stakes shared preference, not an account-recovery action.
+// ============================================================
+export async function setHouseholdAlertsEmail(enabled: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Not signed in" };
+
+    const { data: me } = await supabase.from("profiles").select("household_id").eq("id", user.id).single();
+    if (!me?.household_id) return { ok: false, error: "No household found for this account" };
+
+    const admin = createAdminClient();
+    const { error } = await admin.from("households").update({ alerts_email_enabled: enabled }).eq("id", me.household_id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to update preference" };
+  }
+}

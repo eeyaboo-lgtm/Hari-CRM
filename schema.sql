@@ -385,3 +385,46 @@ create table if not exists household_invites (
 -- prevent_direct_household_change() — BEFORE UPDATE trigger on profiles. Blocks a user from
 -- self-editing household_id via the normal profiles_update policy; bypassed only by admin or by
 -- redeem_household_invite() (via a transaction-local `app.allow_household_change` flag).
+
+-- ============================================================
+-- Fitness section: body measurements/BMI history + Flo-style cycle
+-- tracker (2026-08-19, migration fitness_body_metrics_and_cycle_logs)
+-- ============================================================
+
+create table health_body_metrics (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references profiles(id) on delete cascade,
+  visibility visibility_level not null default 'private',
+  entry_date date not null default current_date,
+  weight_kg numeric,
+  height_cm numeric,
+  body_fat_pct numeric,
+  waist_cm numeric,
+  chest_cm numeric,
+  hips_cm numeric,
+  arm_cm numeric,
+  thigh_cm numeric,
+  resting_hr integer,
+  notes text,
+  created_at timestamptz not null default now()
+);
+call install_household_rls('health_body_metrics');
+
+create table health_cycle_logs (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references profiles(id) on delete cascade,
+  visibility visibility_level not null default 'private',
+  entry_date date not null default current_date,
+  flow text not null default 'none',   -- 'none' | 'spotting' | 'light' | 'medium' | 'heavy'
+  symptoms text[] not null default '{}',
+  mood text,
+  notes text,
+  created_at timestamptz not null default now()
+);
+call install_household_rls('health_cycle_logs');
+
+-- ============================================================
+-- Smart alerts: per-household email opt-in (2026-08-19, migration
+-- households_alerts_email_opt_in)
+-- ============================================================
+alter table households add column if not exists alerts_email_enabled boolean not null default false;

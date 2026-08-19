@@ -1,6 +1,19 @@
 # Hari-CRM Build Roadmap Queue
 **Read this at the start of every session — Claude should remind you where we are in this list.** Check items off as they ship; add new ones as they come up. Full context/rationale for each item lives in `LifeOS-Billion-Dollar-Strategy.md`.
 
+## 2026-08-19 roadmap (user-approved, session #22) — executed same session, no delay
+User picked 4 items off the session's suggestions doc (`HARI-CRM-SUGGESTIONS-2026-08-19.md`) and said to execute them one by one without waiting. All 4 shipped and build-verified same session (0 errors, 28 routes):
+- [x] **Fix dead buttons/placeholders** — Dashboard's "Quick add" button (dead since session #6) now opens a real launcher (`components/QuickAddModal.tsx`); admin JSON backup now has a real, guarded **restore** (`restoreHousehold` in `app/settings/actions.ts` + confirm-by-typing-the-name UI in `AdminHouseholdOverview.tsx`); Dashboard's "Spending trend"/"Where attention is going" cards were 100% hardcoded fake numbers — replaced with real computed data (`useSpendingTrend`/`useSpendingCategorySplit` in `DashboardLiveWidgets.tsx`, honestly labeled "projected" since there's no transaction ledger for true history); Settings' "Email reminders" toggle was pure localStorage cosplay (comment literally said "actual delivery goes live once the backend is wired up") — now wired to the real alerts backend below.
+- [x] **Global search (Cmd+K)** — `components/GlobalSearch.tsx`, mounted in `app/layout.tsx`, searches across Finance/Health/Fitness/Business/Memberships/Calendar/Vision from any page.
+- [x] **Fitness section** — new `/fitness` page + Sidebar entry: BMI calculator, body measurements history log (weight/height/body fat/waist/chest/hips/arm/thigh/resting HR — new `health_body_metrics` table), and a Flo-style cycle tracker with real calendar-based predictions (cycle day / next period / fertile window — new `health_cycle_logs` table, math in `lib/fitnessUtils.ts`, hand-verified against known 28-day-cycle test data). Available to any household member, not gender-gated.
+- [x] **Smart push/email alerts** — real in-app version ships working today: `components/AlertsBanner.tsx` on the Dashboard surfaces budget-over-limit, bills due in 3 days, active price overrides, and membership/insurance renewals in 14 days, computed live from existing data (`lib/alertsUtils.ts`). The **email** half (`app/api/alerts/notify/route.ts` + Resend) is real code, build-verified, but genuinely can't do anything until the user finishes 3 external setup steps — see "Smart alerts setup" below. Don't mark this fully done until that's confirmed working.
+
+### Smart alerts setup (needed before email digests actually send)
+1. **Resend account** (free: 100 emails/day, 3,000/month, $0/mo) at resend.com, then **verify a domain you control** — Resend, like any real email API, won't send from an unverified domain. If there's no domain handy, a cheap one (~$10/yr) is the blocker, not the code.
+2. **Render env vars**: `RESEND_API_KEY` (from Resend), `ALERTS_FROM_EMAIL` (e.g. `alerts@yourdomain.com`, must be on the verified domain), `ALERTS_CRON_SECRET` (any random string you make up — protects the endpoint from being triggered by strangers).
+3. **Free external cron** — Render/Next.js has no built-in scheduler here, so use a free service like cron-job.org to hit `https://hari-crm.onrender.com/api/alerts/notify?secret=<ALERTS_CRON_SECRET>` once a day.
+Until all 3 are done, the route safely returns "not configured" and sends nothing — no risk in deploying it early.
+
 ## Phase 0 — Existing polish backlog (pre-dates the strategy session)
 - [x] Quick Launch customization (pick/add/remove shortcuts via Settings, optional Business-project prefill) — `lib/quickLaunch.ts`. Shipped 2026-08-17, commit `cc34cc9`, live.
 - [ ] Consolidated "Upcoming" widget (Renewals + Appointments + Payments + Reminders merged into one)

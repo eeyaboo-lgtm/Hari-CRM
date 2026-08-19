@@ -8,6 +8,7 @@
 // "Spending trend". Kept as small, focused hooks/components rather than
 // touching Finance's page directly, to avoid risking regressions there.
 import Link from "next/link";
+import { useMemo } from "react";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import {
   calcEMI,
@@ -17,6 +18,8 @@ import {
   budgetStatus,
   BUDGET_STATUS_CLASSES,
   nextMonthlyDate,
+  projectMonthlyOutflow,
+  COLORS,
 } from "@/lib/financeUtils";
 
 type Currency = "AED" | "LKR" | "USD";
@@ -126,4 +129,51 @@ export function BudgetStatusDot() {
   const cls = BUDGET_STATUS_CLASSES[status];
   const title = budget > 0 ? `${Math.round((monthlyOutflow / budget) * 100)}% of monthly budget` : "No monthly budget set — add one in Finance";
   return <span className={`h-2.5 w-2.5 rounded-full ${cls.bg}`} title={title} />;
+}
+
+// ============================================================
+// Real "Spending trend" + "Where money is going" data (2026-08-19).
+// Both cards used to render hardcoded fake numbers (a random 6-month
+// squiggle, a fixed 45/25/20/10 split) that never changed no matter what
+// was actually in Finance — a placeholder masquerading as a live chart.
+// There's no per-month transaction ledger yet (only recurring
+// loans/subs/schemes + dated one-off expenses), so a true *historical*
+// trend isn't honestly computable — instead this reuses Finance Deep
+// View's own projectMonthlyOutflow() (same function, same disclosed
+// mixed-currency-summed-at-face-value convention) to show a real,
+// clearly-labeled forward projection from what's actually on file today.
+// ============================================================
+
+export function useSpendingTrend(monthsAhead = 6) {
+  const [loans] = useLocalStorage<Loan[]>("finance.loans.v3", []);
+  const [subs] = useLocalStorage<Sub[]>("finance.subs.v3", []);
+  const [schemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", []);
+
+  return useMemo(() => {
+    const subsForProjection = subs.map((s) => ({ ...s, amount: s.amount, taxPct: s.taxPct, cadence: s.cadence, nextDate: s.nextDate, tenureMonths: 0 }));
+    const points = projectMonthlyOutflow(loans, subsForProjection, schemes.flatMap((sc) => sc.items), monthsAhead);
+    return points.map((p) => ({ month: p.month, value: p.total }));
+  }, [loans, subs, schemes, monthsAhead]);
+}
+
+export function useSpendingCategorySplit() {
+  const [loans] = useLocalStorage<Loan[]>("finance.loans.v3", []);
+  const [subs] = useLocalStorage<Sub[]>("finance.subs.v3", []);
+  const [schemes] = useLocalStorage<Scheme[]>("finance.schemes.v1", []);
+
+  return useMemo(() => {
+    const loansTotal = loans.reduce((sum, l) => sum + calcEMI(l.principal, l.interestRate, l.tenureMonths), 0);
+    const subsTotal = subs.reduce((sum, s) => sum + monthlySubCost(s), 0);
+    const schemesTotal = schemes
+      .flatMap((sc) => sc.items)
+      .filter(schemeItemActive)
+      .reduce((sum, it) => sum + it.amount, 0);
+    const total = loansTotal + subsTotal + schemesTotal;
+    if (total <= 0) return [];
+    return [
+      { name: "Loans", value: Math.round((loansTotal / total) * 100), color: COLORS.blue },
+      { name: "Subscriptions", value: Math.round((subsTotal / total) * 100), color: COLORS.pink },
+      { name: "Payment schemes", value: Math.round((schemesTotal / total) * 100), color: COLORS.purple },
+    ].filter((d) => d.value > 0);
+  }, [loans, subs, schemes]);
 }

@@ -1,15 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import SnapshotChart from "@/components/charts/SnapshotChart";
 import CategoryDonut from "@/components/charts/CategoryDonut";
-import { DashboardHeroSubtitle, UpcomingPaymentsCard, BudgetStatusDot } from "@/components/DashboardLiveWidgets";
+import QuickAddModal from "@/components/QuickAddModal";
+import AlertsBanner from "@/components/AlertsBanner";
+import {
+  DashboardHeroSubtitle,
+  UpcomingPaymentsCard,
+  BudgetStatusDot,
+  useSpendingTrend,
+  useSpendingCategorySplit,
+} from "@/components/DashboardLiveWidgets";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_GRADIENT, type QuickLaunchItem } from "@/lib/quickLaunch";
 import {
   HeartPulse,
+  Activity,
   Wallet,
   Briefcase,
   Sparkles,
@@ -18,15 +28,19 @@ import {
 } from "lucide-react";
 
 // Finance widgets below are live (components/DashboardLiveWidgets.tsx, reads
-// the same localStorage keys as app/finance/page.tsx). The spending-trend
-// chart and category-donut percentages are still placeholder until Supabase
-// wiring — see HANDOVER.md.
+// the same localStorage keys as app/finance/page.tsx). The trend chart and
+// category donut are real too, as of 2026-08-19 — see useSpendingTrend/
+// useSpendingCategorySplit in DashboardLiveWidgets.tsx for what they
+// compute and why they're framed as a projection, not history.
 
 export default function DashboardPage() {
   // Quick Launch is user-customizable from Settings (Phase 0 backlog) — see
   // lib/quickLaunch.ts for the shared type/storage key/color lookup (used
   // by both this page and Settings, so they never drift).
   const [quickLaunch] = useLocalStorage<QuickLaunchItem[]>(QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const trendData = useSpendingTrend(6);
+  const categoryData = useSpendingCategorySplit();
 
   return (
     <div className="flex min-h-screen bg-base-bg">
@@ -34,6 +48,7 @@ export default function DashboardPage() {
 
       <main className="flex-1 space-y-6 p-6">
         <TopBar />
+        <AlertsBanner />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Left + center column */}
@@ -45,9 +60,14 @@ export default function DashboardPage() {
                   This month at a glance
                 </h2>
                 <DashboardHeroSubtitle />
-                <button className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-base-bg shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => setQuickAddOpen(true)}
+                  className="mt-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-base-bg shadow-lg transition-transform hover:scale-[1.03]"
+                >
                   Quick add
                 </button>
+                <QuickAddModal open={quickAddOpen} onClose={() => setQuickAddOpen(false)} />
               </div>
               <div className="relative z-10 hidden h-24 w-24 rounded-full bg-gradient-to-br from-accent-purple to-accent-blue opacity-60 blur-[2px] shadow-glow-purple sm:block" />
             </div>
@@ -79,9 +99,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Module shortcuts */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
               {[
                 { label: "Health", href: "/health", icon: HeartPulse, color: "text-accent-pink" },
+                { label: "Fitness", href: "/fitness", icon: Activity, color: "text-accent-blue" },
                 { label: "Finance", href: "/finance", icon: Wallet, color: "text-accent-blue" },
                 { label: "Business", href: "/business", icon: Briefcase, color: "text-accent-purple" },
                 { label: "Vision Board", href: "/vision", icon: Sparkles, color: "text-accent-green" },
@@ -107,41 +128,31 @@ export default function DashboardPage() {
             <div className="glass-card rounded-xl2 p-5">
               <div className="relative z-10 mb-2 flex items-center justify-between">
                 <h3 className="flex items-center gap-2 font-medium text-white">
-                  <BudgetStatusDot /> Spending trend
+                  <BudgetStatusDot /> Committed outflow (projected)
                 </h3>
                 <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-gray-400">
-                  6 months
+                  Next 6 months
                 </span>
               </div>
               <div className="relative z-10">
-                <SnapshotChart />
+                <SnapshotChart data={trendData} />
               </div>
             </div>
 
             <div className="glass-card rounded-xl2 p-5">
-              <h3 className="relative z-10 mb-2 font-medium text-white">Where attention is going</h3>
+              <h3 className="relative z-10 mb-2 font-medium text-white">Where money is going</h3>
               <div className="relative z-10">
-                <CategoryDonut />
+                <CategoryDonut data={categoryData} />
               </div>
               <div className="relative z-10 mt-4 space-y-2 text-sm">
-                <div className="flex items-center justify-between text-gray-300">
-                  <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-accent-blue" /> Finance
-                  </span>
-                  <span>45%</span>
-                </div>
-                <div className="flex items-center justify-between text-gray-300">
-                  <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-accent-pink" /> Health
-                  </span>
-                  <span>25%</span>
-                </div>
-                <div className="flex items-center justify-between text-gray-300">
-                  <span className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-accent-purple" /> Business
-                  </span>
-                  <span>20%</span>
-                </div>
+                {categoryData.map((slice) => (
+                  <div key={slice.name} className="flex items-center justify-between text-gray-300">
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: slice.color }} /> {slice.name}
+                    </span>
+                    <span>{slice.value}%</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

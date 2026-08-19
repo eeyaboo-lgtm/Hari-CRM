@@ -4,6 +4,7 @@ import { HouseholdProvider } from "@/lib/HouseholdContext";
 import ProfileGate from "@/components/ProfileGate";
 import MobileBackButton from "@/components/MobileBackButton";
 import CookieConsent from "@/components/CookieConsent";
+import GlobalSearch from "@/components/GlobalSearch";
 
 export const metadata: Metadata = {
   title: "Hari-CRM — Life Dashboard",
@@ -30,7 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-base-bg text-gray-200 antialiased">
         <HouseholdProvider>
           <MobileBackButton />
-          <ProfileGate>{children}</ProfileGate>
+          <ProfileGate>
+            {children}
+            <GlobalSearch />
+          </ProfileGate>
           <CookieConsent />
         </HouseholdProvider>
       </body>
