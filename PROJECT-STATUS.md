@@ -1,6 +1,6 @@
 # PROJECT-STATUS.md — Hari-CRM
 
-Last updated: 2026-08-14. Follows the dated-append convention in CLAUDE.md —
+Last updated: 2026-08-22. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
 
 ## 2026-08-14 (later) — Live preview deployed, login temporarily disabled
@@ -322,3 +322,120 @@ downloadable JSON backup per household). Full detail in `HANDOVER.md` #20 — re
 Deliberately not done yet: restore-from-backup UI (design decided, not built), the actual
 Finance-page privacy toggle (the underlying `ownerMap.resolveOwner()` never emits `private` today
 — real gap found this session, plumbing fix designed but not wired into the Finance UI).
+
+## 2026-08-19 (session #21) — Real shared Calendar + legal pages + cookie banner — RECONSTRUCTED, backfilled 2026-08-22
+
+**This entry was written 2026-08-22 from `HANDOVER.md` #21 and prior session memory, not
+independently re-verified against the live site or live DB this session — flagging per the
+Antigravity handoff setup so nobody mistakes this for a live-confirmed entry.**
+
+Built a real shared Calendar (`app/calendar/page.tsx`) replacing the earlier approved static
+mockup: month grid, click-a-day add/view, new `calendar_events` table (`shared`/
+`mirrored_edit` visibility, any household member can add/edit), payments-per-date overlaid
+read-only from Finance's existing localStorage-synced bill data (`lib/calendarPayments.ts`).
+Known scope limit: shows each bill's single next occurrence, not a full recurring projection.
+Google Calendar sync still shown locked/pending-verification.
+
+Legal pages shipped fresh for this app's real data model: `app/legal/{privacy,terms,about,
+instructions}/page.tsx` + `components/LegalPageLayout.tsx` shell (reused pattern from the
+Dino History World project's `LEGAL-TEMPLATE-REUSABLE.md`, content written new, not
+copy-pasted) + `components/CookieConsent.tsx` (notice-only banner, no analytics cookie exists
+yet to gate) + `components/LegalFooter.tsx`, linked from `/login` and Settings. Not
+lawyer-reviewed — see `MAINTENANCE.md`.
+
+**Mid-session correction, important — do not reintroduce:** the privacy/instructions/about
+pages originally disclosed that the admin account can see all households and export JSON
+backups (a real, already-shipped capability from session #20). User asked explicitly for that
+*public disclosure* to be removed (not the underlying feature) — done, and this rule now also
+lives in `AGENTS.md` §9 so it isn't lost again.
+
+Small unrelated fix: Health → Allergy history's add form was missing Status/Reaction/Date/
+Notes fields on first entry (only appeared after editing) — added to the initial form.
+
+**Local-folder duplication discovered and documented this session** — see `AGENTS.md` §3 for
+the current, corrected version of this (inner folder = real git tree, outer = stale
+duplicate).
+
+## 2026-08-19 (session #22) — Favicon shipped + full suggestions doc (review session, no features built) — RECONSTRUCTED, backfilled 2026-08-22
+
+**Reconstructed from prior session memory, not independently re-verified this session.**
+
+Built a new browser-tab favicon from the app's existing brand mark (`public/brand-mark.svg`,
+rendered via `rsvg-convert` into `app/favicon.ico`/`icon.png`/`apple-icon.png`). Delivered
+`HARI-CRM-SUGGESTIONS-2026-08-19.md`: necessary fixes, further suggestions, a fitness-tracking
+section, 3 highest-conviction new ideas, and 5 verified free third-party integrations (Open
+Food Facts, Spoonacular free tier, Frankfurter.app, Open-Meteo, Google Calendar sync). User
+picked 4 items from this doc immediately, executed same session — see session #23 below.
+
+## 2026-08-19/20 (session #23) — Roadmap execution: dead buttons fixed, global search, fitness module, smart alerts — RECONSTRUCTED, backfilled 2026-08-22; deploy status now independently confirmed
+
+**Reconstructed from `HANDOVER.md` #23 and prior session memory; the git/deploy state below,
+however, WAS independently re-verified live this session (2026-08-22) via `git log`/`git
+status` on the real working tree — see the note at the bottom, this is the one part of this
+entry that isn't secondhand.**
+
+All 4 items Coco picked off session #22's suggestions doc shipped and were build-verified
+together (0 TypeScript errors, 28 routes) in the same session:
+
+1. **Dead buttons/placeholders fixed** — Dashboard's long-dead "Quick add" button now opens a
+   real launcher (`components/QuickAddModal.tsx`); admin JSON backup gained a real, guarded
+   restore flow; Dashboard's trend/donut charts were 100% hardcoded fake numbers, now real
+   computed projections (`DashboardLiveWidgets.tsx`); Settings' "Email reminders" toggle
+   (previously pure localStorage cosplay) now wired to the real alerts backend below.
+2. **Global search (Cmd+K)** — `components/GlobalSearch.tsx`, searches Finance/Health/
+   Fitness/Business/Memberships/Calendar/Vision from any page via existing localStorage
+   caches, no new fetches.
+3. **New `/fitness` page** — BMI calculator, body measurements history log, Flo-style cycle
+   tracker with calendar-based predictions (hand-verified against a synthetic 28-day test
+   dataset). Two new Supabase tables: `health_body_metrics`, `health_cycle_logs`.
+4. **Smart alerts** — real in-app version live: `components/AlertsBanner.tsx` on the
+   Dashboard (budget/upcoming-payments/elevated-subs/renewals), computed from existing data.
+   Email half is real, build-verified code (`app/api/alerts/notify/route.ts` + Resend,
+   `households.alerts_email_enabled` opt-in) but needs 3 external manual steps before it can
+   send anything — see `BACKLOG.md`/`MAINTENANCE.md`.
+
+**Git/deploy status — independently confirmed 2026-08-22 (this is not reconstructed):** all of
+the above is in commit `75656e4` ("r33af3a3e222"), pushed 2026-08-20, and the real working
+tree's `main` branch is confirmed up to date with `origin/main` via `git log`/`git status`
+this session. This **resolves** the "several commits stuck locally, cloud sandbox git push
+blocked" situation noted after session #23 in Claude Cowork's private memory — Coco pushed it
+himself via GitHub Desktop since then, as expected per the documented workaround. **Not
+independently confirmed this session:** whether Render's auto-deploy actually redeployed and
+the live site reflects this commit — flagged as the first concrete check for whoever picks
+this project up next, see `HANDOFF.md`.
+
+## 2026-08-22 — Claude Cowork ⇄ Google Antigravity handover system set up (documentation only, no code touched)
+
+Coco is bringing Google Antigravity onto this project as a second execution agent (same
+pattern already used on his Dino History World project) — it runs locally on his machine with
+persistent git auth and picks up execution work when Claude Cowork's usage limits are hit or
+for overnight/parallel progress.
+
+This session, in the real working tree (repo root):
+- **Rewrote `AGENTS.md`** from its prior unfilled template into a real entry-point doc: role
+  hierarchy between the two agents, project purpose, the inner/outer local-folder gotcha
+  (confirmed still present on disk, documented precisely this time), current tech stack, a
+  data/schema snapshot (including newly-confirmed drift — `schema.sql` is missing several
+  live tables), the project's actual operating rules restated from `CLAUDE.md`, git/commit
+  discipline (including the newly-confirmed ~56-file CRLF noise and the pathspec gotcha),
+  the backend/DB access pattern for both agents, known operational gotchas, the
+  `HANDOFF.md`/`PROJECT-STATUS.md` handoff protocol, and the credentials policy.
+- **Created `HANDOFF.md`** — the overwrite-each-session baton, with a ready-to-paste
+  Antigravity session-start prompt at the top.
+- **Created `MAINTENANCE.md`** — periodically-stale content (schema drift, the Resend/domain
+  dependency, manually-seeded FX rates, unreviewed legal pages, the Google auth
+  "Confirm email" toggle, the CRLF noise, and the two strategy/suggestions docs) with a
+  re-check log.
+- **Backfilled this file** for sessions #21–23 (2026-08-19/20), which had shipped real work
+  but never gotten a `PROJECT-STATUS.md` entry — each backfilled section above is explicitly
+  flagged as reconstructed from `HANDOVER.md`/memory, not independently re-verified, except
+  where noted.
+- **Discovered and fixed a stale assumption in the process:** Claude Cowork's private memory
+  believed the local repo was still several commits ahead of GitHub, unpushed, due to the
+  cloud sandbox's git-push block. Checking `git log`/`git status` directly on Coco's machine
+  this session showed that's no longer true — he already pushed via GitHub Desktop
+  (commit `75656e4`, 2026-08-20). This is exactly the kind of drift the new handoff system is
+  meant to catch going forward, on both sides.
+
+No application code, database schema, or deployed behavior changed this session — purely
+documentation, as scoped.
