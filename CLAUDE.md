@@ -164,6 +164,42 @@ Avoid:
 
 ---
 
+# Form & Data-Entry Standards
+
+Project philosophy: this app is the user's secretary/PA/accountant/financial advisor/health
+coach in one. The user should not have to think when they hand it something — it should know
+what to do. Every form, field, and sync path below exists to serve that: never make the user
+guess what a field means, never lose what they typed.
+
+Non-negotiable, every time a form is touched or a new one is built:
+
+* **No unlabeled "Add" rows.** Every input in an add-new-item row must have a persistent
+  `<label>` above it, exactly like the equivalent edit-mode row. Placeholder text alone doesn't
+  count — it disappears the moment the user starts typing, and by then they've forgotten what
+  they were filling in. If an edit row is labeled and its matching add row isn't, that's a bug.
+* **Hover hints on anything ambiguous.** Any numeric, select, or toggle field whose meaning
+  isn't obvious from its label alone (what does 0 mean, what happens if I leave this blank,
+  does this repeat) gets a small one-line hover tooltip. Keep it to one sentence.
+* **Dates use the shared `<DatePicker />` component** (`components/DatePicker.tsx`), never a
+  raw `<input type="date">`. The native control's segment-typing is broken (typing "2026" into
+  the year segment truncates) and its calendar popup can't be themed. `DatePicker` is a
+  themed Day/Month/Year dropdown (dark blue background, white text) that also works on
+  touch/handheld devices.
+* **Any new Supabase-backed data hook must integrate with `lib/supabase/syncStatus.ts`** —
+  call `beginWrite()`/`endWrite()` around every write and `reportError()`/`clearError()` on
+  failure. This is what powers the global "Saving…" / "Couldn't save" indicator
+  (`components/SaveStatusIndicator.tsx`) and the `beforeunload` guard that stops the user from
+  navigating away mid-save. A hook that fires-and-forgets a Supabase write with no queueing and
+  no status wiring is how data gets silently lost on refresh (this happened — see
+  `useSupabaseSynced.ts`'s header comment for the 2026-08-23 incident and fix). Don't
+  reintroduce that pattern.
+
+Before marking any form/data-entry work done, check all four of the above — for this file and
+for every other place the same pattern appears. Don't scope a fix to just the section that was
+reported broken; grep for the pattern across the app first.
+
+---
+
 # Architecture Standards
 
 Before introducing:

@@ -3,6 +3,58 @@
 Last updated: 2026-08-23. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
 
+## 2026-08-23 (later, session #26) — Data-loss root-cause fix + DatePicker + app-wide add-row label audit + new standing rule (code delivered, not yet pushed by Coco)
+
+**Trigger:** Coco reported adding 3 allergy history entries for Shalini, refreshing the page,
+and losing all of them — with an explicit instruction not to scope the fix to just that
+section. Same message also reported the native date input mangling typed years (e.g. "27/
+07/0002" from typing "2026") and asked for a themed, handheld-friendly dropdown instead, plus
+asked to extend the earlier Finance-only add-row label audit (see the entry above) app-wide and
+to write a standing rule so it can't regress.
+
+**Root cause (confirmed via code reading of the shared sync hooks, not live DB access):**
+`lib/supabase/useSupabaseSynced.ts` — used by nearly every CRUD module (Accounts, Cards,
+Loans, Subscriptions, Income, Health Conditions/Allergies/Appointments, Business Projects,
+Calendar Events) — fired Supabase writes fire-and-forget with no queueing between overlapping
+calls and no guard against the page unloading mid-write, and surfaced failures nowhere but the
+console. Section-level logic (e.g. `AllergiesSection`) was correct; the defect was entirely in
+the shared hook, confirming the user's instinct that this wasn't Allergies-specific.
+
+**Fix:** new `lib/supabase/syncStatus.ts` shared write-status store (`beginWrite`/
+`reportError`/`clearError`, plus a `beforeunload` guard); `useSupabaseSynced.ts` rewritten with
+a write-queue serializer and self-healing recovery-on-mount for any item that was cached
+locally but never confirmed synced; `useSchemesSynced.ts` and `useSavingsGoal.ts` wired into
+the same status store (queueing only for schemes, no recovery-merge yet — flagged for later if
+Payment Schemes ever shows the same symptom); new global `<SaveStatusIndicator />` mounted in
+`app/layout.tsx` so a failed save is visible ("Couldn't save N changes") instead of silent.
+**Not yet confirmed by Coco that the original symptom is resolved.**
+
+**DatePicker:** new `components/DatePicker.tsx`, a themed Day/Month/Year dropdown (dark navy,
+white text, `[color-scheme:dark]`) replacing all 30 occurrences of raw `<input type="date">`
+across `app/finance/page.tsx`, `app/health/page.tsx`, `app/fitness/page.tsx`,
+`app/memberships/page.tsx`.
+
+**Label audit extended app-wide:** same "edit row labeled, add row isn't" pattern found and
+fixed in `app/health/page.tsx` (Conditions, Appointments — previously zero labels),
+`app/fitness/page.tsx` (Measurements, Cycle Tracker), `app/business/page.tsx` (project add/
+edit forms). Checked and already compliant: Calendar, Settings, Vision pages/components,
+Memberships (only needed the DatePicker swap).
+
+**Standing rule added:** new "Form & Data-Entry Standards" section in `CLAUDE.md` (between
+Coding Standards and Architecture Standards) plus a restating bullet in `AGENTS.md` §6, so both
+Claude Cowork and Google Antigravity enforce: persistent labels on every add-row, one-line
+hover hints on ambiguous fields, `DatePicker` instead of raw date inputs, and
+`syncStatus.ts` wiring for any new Supabase-sync hook — tied explicitly back to the project's
+"secretary/PA/accountant/health-coach" philosophy (the user should never have to guess a
+field's meaning or risk losing what they typed).
+
+**Verification:** every edited file checked with a Babel parser (JSX+TypeScript plugins) for
+syntax validity only — no `tsc`/`next build` run this session (no node_modules/full repo
+available). All files delivered via `SendUserFile` and committed straight to the real (inner)
+repo folder via the device bridge; nothing pushed to GitHub (still blocked from the cloud
+sandbox, see `feedback_git_push_proxy_block` in memory). Full detail in memory:
+`project_hari_data_loss_and_ux_audit.md`.
+
 ## 2026-08-23 — Business Projects/Dashboard data-leak fix + Savings Goals shipped (code delivered, not yet pushed by Coco)
 
 **Trigger:** Coco reported a friend logging in via his own Google account saw Shenaal's

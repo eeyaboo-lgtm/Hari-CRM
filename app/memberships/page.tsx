@@ -7,6 +7,7 @@
 // pending the Supabase wiring pass (see HANDOVER.md).
 import { useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import DatePicker from "@/components/DatePicker";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { uid, daysUntil, formatDaysUntil, formatMoney } from "@/lib/financeUtils";
@@ -244,21 +245,11 @@ function MembershipCard({
           </div>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Next payment / renewal date</label>
-            <input
-              type="date"
-              value={m.renewalDate}
-              onChange={(e) => onUpdate({ ...m, renewalDate: e.target.value })}
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-            />
+            <DatePicker value={m.renewalDate} onChange={(v) => onUpdate({ ...m, renewalDate: v })} className="w-full" />
           </div>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Expiry date</label>
-            <input
-              type="date"
-              value={m.expiryDate}
-              onChange={(e) => onUpdate({ ...m, expiryDate: e.target.value })}
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-            />
+            <DatePicker value={m.expiryDate} onChange={(v) => onUpdate({ ...m, expiryDate: v })} className="w-full" />
           </div>
         </div>
         <div className="mt-1 flex shrink-0 flex-col items-center gap-2">

@@ -130,6 +130,16 @@ for any new table.
      full coverage you didn't do.
 - **Communication:** direct, professional, no emojis, no hype, don't blindly agree — push
   back on weak ideas with a constructive alternative.
+- **Form & data-entry standards (see `CLAUDE.md` § "Form & Data-Entry Standards" for full
+  detail):** every add-new-item row needs persistent labels matching its edit-mode counterpart
+  (placeholder text alone doesn't count); ambiguous numeric/select/toggle fields need a
+  one-line hover hint; dates use the shared `components/DatePicker.tsx`, never raw
+  `<input type="date">`; any new Supabase-sync hook must wire into
+  `lib/supabase/syncStatus.ts` (`beginWrite`/`endWrite`/`reportError`/`clearError`) so writes
+  are queued, failures are visible, and navigation-mid-save is guarded. This app is meant to
+  think for the user (secretary/PA/accountant/health-coach in one) — never make them guess a
+  field's meaning, never lose what they typed. Check for these patterns app-wide, not just in
+  the section you're touching.
 
 Full detail, the SEO/Content Playbook, and the underlying "Multi-AI Memory & Handoff Habits"
 convention this file is built on all live in `CLAUDE.md` — read it if any of the above is

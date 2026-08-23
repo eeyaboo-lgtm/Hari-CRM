@@ -5,6 +5,7 @@ import ProfileGate from "@/components/ProfileGate";
 import MobileBackButton from "@/components/MobileBackButton";
 import CookieConsent from "@/components/CookieConsent";
 import GlobalSearch from "@/components/GlobalSearch";
+import SaveStatusIndicator from "@/components/SaveStatusIndicator";
 
 export const metadata: Metadata = {
   title: "Hari-CRM — Life Dashboard",
@@ -36,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <GlobalSearch />
           </ProfileGate>
           <CookieConsent />
+          <SaveStatusIndicator />
         </HouseholdProvider>
       </body>
     </html>

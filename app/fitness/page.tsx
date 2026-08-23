@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import DatePicker from "@/components/DatePicker";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
 import { calcBMI, bmiCategory, BMI_CATEGORY_COLOR, predictCycle, type CycleFlow } from "@/lib/fitnessUtils";
@@ -164,13 +165,14 @@ function MeasurementCard({
     return (
       <div className="rounded-xl border border-accent-purple/40 bg-base-card/60 p-3 text-sm">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
-          <input
-            type="date"
-            value={entry.entryDate}
-            onChange={(e) => onUpdate({ ...entry, entryDate: e.target.value })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <DatePicker value={entry.entryDate} onChange={(v) => onUpdate({ ...entry, entryDate: v })} />
+          </div>
           {MEASUREMENT_FIELDS.map((f) => (
             <div key={String(f.key)}>
               <label className="mb-1 block text-[11px] text-gray-500">{f.label} ({f.unit})</label>
@@ -297,13 +299,14 @@ function MeasurementsSection({ onLatestForActive }: { onLatestForActive: (m: { w
 
       <div className="relative z-10 mb-4 rounded-xl2 border border-dashed border-base-border bg-base-card/30 p-4">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
-          <input
-            type="date"
-            value={draft.entryDate}
-            onChange={(e) => setDraft({ ...draft, entryDate: e.target.value })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <DatePicker value={draft.entryDate} onChange={(v) => setDraft({ ...draft, entryDate: v })} />
+          </div>
           <div />
           {MEASUREMENT_FIELDS.map((f) => (
             <div key={String(f.key)}>
@@ -385,28 +388,35 @@ function CycleLogRow({
     return (
       <div className="rounded-xl border border-accent-purple/40 bg-base-card/60 p-3 text-sm">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
-          <input
-            type="date"
-            value={entry.entryDate}
-            onChange={(e) => onUpdate({ ...entry, entryDate: e.target.value })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
-          <select
-            value={entry.flow}
-            onChange={(e) => onUpdate({ ...entry, flow: e.target.value as CycleFlow })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          >
-            {FLOW_OPTIONS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-          <input
-            value={entry.mood}
-            onChange={(e) => onUpdate({ ...entry, mood: e.target.value })}
-            placeholder="Mood"
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <DatePicker value={entry.entryDate} onChange={(v) => onUpdate({ ...entry, entryDate: v })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Flow</label>
+            <select
+              value={entry.flow}
+              onChange={(e) => onUpdate({ ...entry, flow: e.target.value as CycleFlow })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {FLOW_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Mood</label>
+            <input
+              value={entry.mood}
+              onChange={(e) => onUpdate({ ...entry, mood: e.target.value })}
+              placeholder="optional"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
         </div>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {SYMPTOM_OPTIONS.map((s) => (
@@ -542,28 +552,35 @@ function CycleTrackerSection() {
 
       <div className="relative z-10 mb-4 rounded-xl2 border border-dashed border-base-border bg-base-card/30 p-4">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
-          <input
-            type="date"
-            value={draft.entryDate}
-            onChange={(e) => setDraft({ ...draft, entryDate: e.target.value })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
-          <select
-            value={draft.flow}
-            onChange={(e) => setDraft({ ...draft, flow: e.target.value as CycleFlow })}
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          >
-            {FLOW_OPTIONS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-          <input
-            value={draft.mood}
-            onChange={(e) => setDraft({ ...draft, mood: e.target.value })}
-            placeholder="Mood"
-            className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-          />
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <DatePicker value={draft.entryDate} onChange={(v) => setDraft({ ...draft, entryDate: v })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Flow</label>
+            <select
+              value={draft.flow}
+              onChange={(e) => setDraft({ ...draft, flow: e.target.value as CycleFlow })}
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            >
+              {FLOW_OPTIONS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-gray-500">Mood</label>
+            <input
+              value={draft.mood}
+              onChange={(e) => setDraft({ ...draft, mood: e.target.value })}
+              placeholder="optional"
+              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+            />
+          </div>
         </div>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {SYMPTOM_OPTIONS.map((s) => (

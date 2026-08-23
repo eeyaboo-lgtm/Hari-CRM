@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import DatePicker from "@/components/DatePicker";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useHousehold } from "@/lib/HouseholdContext";
@@ -101,19 +102,23 @@ function ConditionRow({
 
   if (editing) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
-        <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
-        <input
-          value={entry.text}
-          onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
-          className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          type="date"
-          value={entry.date ?? ""}
-          onChange={(e) => onUpdate({ ...entry, date: e.target.value || undefined })}
-          className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Household member</label>
+          <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <label className="mb-1 block text-xs text-gray-500">Condition</label>
+          <input
+            value={entry.text}
+            onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
+            className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Date noted</label>
+          <DatePicker value={entry.date ?? ""} onChange={(v) => onUpdate({ ...entry, date: v || undefined })} />
+        </div>
         <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
           <Check size={16} />
         </button>
@@ -173,21 +178,25 @@ function ConditionsSection() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <h2 className="relative z-10 mb-3 font-medium text-white">Conditions &amp; history</h2>
-      <div className="relative z-10 mb-3 flex flex-wrap gap-2">
-        <MemberSelect value={memberId} onChange={setMemberId} />
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="e.g. Seasonal allergies, past surgery, ongoing condition"
-          className="min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
+      <div className="relative z-10 mb-3 flex flex-wrap items-end gap-2">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Household member</label>
+          <MemberSelect value={memberId} onChange={setMemberId} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <label className="mb-1 block text-xs text-gray-500">Condition</label>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="e.g. Seasonal allergies, past surgery, ongoing condition"
+            className="w-full rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Date noted</label>
+          <DatePicker value={date} onChange={setDate} />
+        </div>
         <button type="button" onClick={add} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
           <Plus size={14} /> Add
         </button>
@@ -301,12 +310,7 @@ function AllergyCard({
           </div>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Date noted</label>
-            <input
-              type="date"
-              value={entry.date}
-              onChange={(e) => onUpdate({ ...entry, date: e.target.value })}
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-            />
+            <DatePicker value={entry.date} onChange={(v) => onUpdate({ ...entry, date: v })} className="w-full" />
           </div>
         </div>
         <div className="mt-1 flex shrink-0 flex-col items-center gap-2">
@@ -430,12 +434,7 @@ function AllergiesSection() {
           </div>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Date noted</label>
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(e) => setDraft({ ...draft, date: e.target.value })}
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-            />
+            <DatePicker value={draft.date} onChange={(v) => setDraft({ ...draft, date: v })} className="w-full" />
           </div>
           <div>
             <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
@@ -499,25 +498,32 @@ function AppointmentRow({
 
   if (editing) {
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
-        <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
-        <input
-          value={entry.text}
-          onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
-          className="min-w-0 flex-1 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          value={entry.provider ?? ""}
-          onChange={(e) => onUpdate({ ...entry, provider: e.target.value || undefined })}
-          placeholder="Clinic/doctor"
-          className="w-36 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          type="date"
-          value={entry.date ?? ""}
-          onChange={(e) => onUpdate({ ...entry, date: e.target.value || undefined })}
-          className="rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 bg-base-card/60 px-3 py-2 text-sm">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Household member</label>
+          <MemberSelect value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <label className="mb-1 block text-xs text-gray-500">Appointment</label>
+          <input
+            value={entry.text}
+            onChange={(e) => onUpdate({ ...entry, text: e.target.value })}
+            className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Clinic/doctor</label>
+          <input
+            value={entry.provider ?? ""}
+            onChange={(e) => onUpdate({ ...entry, provider: e.target.value || undefined })}
+            placeholder="optional"
+            className="w-36 rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Date</label>
+          <DatePicker value={entry.date ?? ""} onChange={(v) => onUpdate({ ...entry, date: v || undefined })} />
+        </div>
         <button type="button" onClick={() => setEditing(false)} className="text-accent-green hover:text-white" title="Done">
           <Check size={16} />
         </button>
@@ -579,27 +585,34 @@ function AppointmentsSection() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <h2 className="relative z-10 mb-3 font-medium text-white">Appointment history</h2>
-      <div className="relative z-10 mb-3 flex flex-wrap gap-2">
-        <MemberSelect value={memberId} onChange={setMemberId} />
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="e.g. Dentist checkup"
-          className="min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          placeholder="Clinic/doctor (optional)"
-          className="w-40 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
-        />
+      <div className="relative z-10 mb-3 flex flex-wrap items-end gap-2">
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Household member</label>
+          <MemberSelect value={memberId} onChange={setMemberId} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <label className="mb-1 block text-xs text-gray-500">Appointment</label>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && add()}
+            placeholder="e.g. Dentist checkup"
+            className="w-full rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Clinic/doctor</label>
+          <input
+            value={provider}
+            onChange={(e) => setProvider(e.target.value)}
+            placeholder="optional"
+            className="w-40 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-gray-500">Date</label>
+          <DatePicker value={date} onChange={setDate} />
+        </div>
         <button type="button" onClick={add} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
           <Plus size={14} /> Add
         </button>
@@ -771,21 +784,11 @@ function InsuranceCard({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-xs text-gray-500">Expiry date</label>
-              <input
-                type="date"
-                value={policy.expiryDate}
-                onChange={(e) => onUpdate({ ...policy, expiryDate: e.target.value })}
-                className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-              />
+              <DatePicker value={policy.expiryDate} onChange={(v) => onUpdate({ ...policy, expiryDate: v })} className="w-full" />
             </div>
             <div>
               <label className="mb-1 block text-xs text-gray-500">Renewal date</label>
-              <input
-                type="date"
-                value={policy.renewalDate}
-                onChange={(e) => onUpdate({ ...policy, renewalDate: e.target.value })}
-                className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-              />
+              <DatePicker value={policy.renewalDate} onChange={(v) => onUpdate({ ...policy, renewalDate: v })} className="w-full" />
             </div>
           </div>
         </div>

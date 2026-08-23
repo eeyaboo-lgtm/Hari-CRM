@@ -17,10 +17,19 @@
 // viewing that household on their behalf. That's the same attribution
 // every other Finance section already uses; reusing it here means admin
 // overlay mode keeps working for Savings Goals with no special-casing.
+//
+// Reliability (2026-08-23): each action here already awaits its Supabase
+// call before updating state, so it doesn't have the race/lost-write bug
+// useSupabaseSynced had — but it also wasn't reporting into the shared
+// syncStatus store, so a refresh mid-save had no beforeunload guard and a
+// failure was console-only. Wrapped every write below with
+// beginWrite()/reportError() for consistency — see useSupabaseSynced.ts's
+// header for the incident this all traces back to.
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getOwnerMap } from "@/lib/supabase/ownerMap";
+import { beginWrite, clearError, reportError } from "@/lib/supabase/syncStatus";
 
 export type GoalVisibility = "private" | "shared_view";
 
@@ -133,99 +142,129 @@ export function useSavingsGoal() {
     visibility: GoalVisibility;
   }) => {
     if (!ownerId) return;
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("finance_savings_goals")
-      .insert({
-        owner_id: ownerId,
-        label: input.label,
-        target_amount: input.targetAmount,
-        currency: input.currency,
-        target_date: input.targetDate,
-        visibility: input.visibility,
-      })
-      .select("*")
-      .single();
-    if (error) {
-      console.error("[useSavingsGoal] create failed", error);
-      return;
+    const endWrite = beginWrite();
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("finance_savings_goals")
+        .insert({
+          owner_id: ownerId,
+          label: input.label,
+          target_amount: input.targetAmount,
+          currency: input.currency,
+          target_date: input.targetDate,
+          visibility: input.visibility,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        console.error("[useSavingsGoal] create failed", error);
+        reportError("finance_savings_goals", "Couldn't save your savings goal — check your connection and try again.");
+        return;
+      }
+      clearError("finance_savings_goals");
+      setGoals((prev) => [
+        ...prev,
+        {
+          id: data.id,
+          ownerId: data.owner_id,
+          label: data.label,
+          targetAmount: Number(data.target_amount) || 0,
+          currency: data.currency,
+          targetDate: data.target_date,
+          visibility: data.visibility,
+        },
+      ]);
+    } finally {
+      endWrite();
     }
-    setGoals((prev) => [
-      ...prev,
-      {
-        id: data.id,
-        ownerId: data.owner_id,
-        label: data.label,
-        targetAmount: Number(data.target_amount) || 0,
-        currency: data.currency,
-        targetDate: data.target_date,
-        visibility: data.visibility,
-      },
-    ]);
   };
 
   const updateGoal = async (
     id: string,
     patch: Partial<{ label: string; targetAmount: number; currency: string; targetDate: string; visibility: GoalVisibility }>
   ) => {
-    const supabase = createClient();
-    const row: Record<string, unknown> = {};
-    if (patch.label !== undefined) row.label = patch.label;
-    if (patch.targetAmount !== undefined) row.target_amount = patch.targetAmount;
-    if (patch.currency !== undefined) row.currency = patch.currency;
-    if (patch.targetDate !== undefined) row.target_date = patch.targetDate;
-    if (patch.visibility !== undefined) row.visibility = patch.visibility;
-    const { error } = await supabase.from("finance_savings_goals").update(row).eq("id", id);
-    if (error) {
-      console.error("[useSavingsGoal] update failed", error);
-      return;
-    }
-    setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
-    // Keep this goal's logged months in sync with its own sharing setting, so
-    // a household member can (or can't) see the numbers behind the shared
-    // progress bar exactly as they can see the goal itself.
-    if (patch.visibility !== undefined) {
-      const { error: logsErr } = await supabase
-        .from("finance_savings_goal_logs")
-        .update({ visibility: patch.visibility })
-        .eq("goal_id", id);
-      if (logsErr) console.error("[useSavingsGoal] log visibility sync failed", logsErr);
+    const endWrite = beginWrite();
+    try {
+      const supabase = createClient();
+      const row: Record<string, unknown> = {};
+      if (patch.label !== undefined) row.label = patch.label;
+      if (patch.targetAmount !== undefined) row.target_amount = patch.targetAmount;
+      if (patch.currency !== undefined) row.currency = patch.currency;
+      if (patch.targetDate !== undefined) row.target_date = patch.targetDate;
+      if (patch.visibility !== undefined) row.visibility = patch.visibility;
+      const { error } = await supabase.from("finance_savings_goals").update(row).eq("id", id);
+      if (error) {
+        console.error("[useSavingsGoal] update failed", error);
+        reportError("finance_savings_goals", "Couldn't save your savings goal changes — check your connection and try again.");
+        return;
+      }
+      clearError("finance_savings_goals");
+      setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+      // Keep this goal's logged months in sync with its own sharing setting, so
+      // a household member can (or can't) see the numbers behind the shared
+      // progress bar exactly as they can see the goal itself.
+      if (patch.visibility !== undefined) {
+        const { error: logsErr } = await supabase
+          .from("finance_savings_goal_logs")
+          .update({ visibility: patch.visibility })
+          .eq("goal_id", id);
+        if (logsErr) console.error("[useSavingsGoal] log visibility sync failed", logsErr);
+      }
+    } finally {
+      endWrite();
     }
   };
 
   const deleteGoal = async (id: string) => {
-    const supabase = createClient();
-    const { error } = await supabase.from("finance_savings_goals").delete().eq("id", id);
-    if (error) {
-      console.error("[useSavingsGoal] delete failed", error);
-      return;
+    const endWrite = beginWrite();
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("finance_savings_goals").delete().eq("id", id);
+      if (error) {
+        console.error("[useSavingsGoal] delete failed", error);
+        reportError("finance_savings_goals", "Couldn't delete that savings goal — check your connection and try again.");
+        return;
+      }
+      clearError("finance_savings_goals");
+      setGoals((prev) => prev.filter((g) => g.id !== id));
+      setLogs((prev) => prev.filter((l) => l.goalId !== id));
+    } finally {
+      endWrite();
     }
-    setGoals((prev) => prev.filter((g) => g.id !== id));
-    setLogs((prev) => prev.filter((l) => l.goalId !== id));
   };
 
   const logMonth = async (goalId: string, amount: number, visibility: GoalVisibility, month: string = firstOfMonth()) => {
     if (!ownerId) return;
-    const supabase = createClient();
-    const existing = logs.find((l) => l.goalId === goalId && l.month === month);
-    if (existing) {
-      const { error } = await supabase.from("finance_savings_goal_logs").update({ amount_saved: amount }).eq("id", existing.id);
-      if (error) {
-        console.error("[useSavingsGoal] log update failed", error);
-        return;
+    const endWrite = beginWrite();
+    try {
+      const supabase = createClient();
+      const existing = logs.find((l) => l.goalId === goalId && l.month === month);
+      if (existing) {
+        const { error } = await supabase.from("finance_savings_goal_logs").update({ amount_saved: amount }).eq("id", existing.id);
+        if (error) {
+          console.error("[useSavingsGoal] log update failed", error);
+          reportError("finance_savings_goal_logs", "Couldn't save this month's savings log — check your connection and try again.");
+          return;
+        }
+        clearError("finance_savings_goal_logs");
+        setLogs((prev) => prev.map((l) => (l.id === existing.id ? { ...l, amountSaved: amount } : l)));
+      } else {
+        const { data, error } = await supabase
+          .from("finance_savings_goal_logs")
+          .insert({ goal_id: goalId, owner_id: ownerId, visibility, month, amount_saved: amount })
+          .select("*")
+          .single();
+        if (error) {
+          console.error("[useSavingsGoal] log insert failed", error);
+          reportError("finance_savings_goal_logs", "Couldn't save this month's savings log — check your connection and try again.");
+          return;
+        }
+        clearError("finance_savings_goal_logs");
+        setLogs((prev) => [...prev, { id: data.id, goalId: data.goal_id, month: data.month, amountSaved: Number(data.amount_saved) || 0 }]);
       }
-      setLogs((prev) => prev.map((l) => (l.id === existing.id ? { ...l, amountSaved: amount } : l)));
-    } else {
-      const { data, error } = await supabase
-        .from("finance_savings_goal_logs")
-        .insert({ goal_id: goalId, owner_id: ownerId, visibility, month, amount_saved: amount })
-        .select("*")
-        .single();
-      if (error) {
-        console.error("[useSavingsGoal] log insert failed", error);
-        return;
-      }
-      setLogs((prev) => [...prev, { id: data.id, goalId: data.goal_id, month: data.month, amountSaved: Number(data.amount_saved) || 0 }]);
+    } finally {
+      endWrite();
     }
   };
 

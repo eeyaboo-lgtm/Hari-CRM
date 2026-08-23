@@ -255,32 +255,42 @@ export default function BusinessPage() {
             if (editingProjectId === p.id && projectDraft) {
               return (
                 <div key={p.id} className="glass-card space-y-2 rounded-xl2 border border-accent-purple/40 p-4">
-                  <input
-                    value={projectDraft.name}
-                    onChange={(e) => setProjectDraft({ ...projectDraft, name: e.target.value })}
-                    placeholder="Name"
-                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-                  />
-                  <input
-                    value={projectDraft.projectType}
-                    onChange={(e) => setProjectDraft({ ...projectDraft, projectType: e.target.value })}
-                    placeholder="Type (e.g. SaaS product)"
-                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-                  />
-                  <input
-                    value={projectDraft.url}
-                    onChange={(e) => setProjectDraft({ ...projectDraft, url: e.target.value })}
-                    placeholder="URL"
-                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-                  />
-                  <textarea
-                    value={projectDraft.notes}
-                    onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value.slice(0, NOTES_MAX_LEN) })}
-                    placeholder="Short description (optional) — shown here only, never on the Dashboard tile"
-                    maxLength={NOTES_MAX_LEN}
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-                  />
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">Name</label>
+                    <input
+                      value={projectDraft.name}
+                      onChange={(e) => setProjectDraft({ ...projectDraft, name: e.target.value })}
+                      className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">Type</label>
+                    <input
+                      value={projectDraft.projectType}
+                      onChange={(e) => setProjectDraft({ ...projectDraft, projectType: e.target.value })}
+                      placeholder="e.g. SaaS product"
+                      className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">URL</label>
+                    <input
+                      value={projectDraft.url}
+                      onChange={(e) => setProjectDraft({ ...projectDraft, url: e.target.value })}
+                      className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-500">Description</label>
+                    <textarea
+                      value={projectDraft.notes}
+                      onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value.slice(0, NOTES_MAX_LEN) })}
+                      placeholder="Optional — shown here only, never on the Dashboard tile"
+                      maxLength={NOTES_MAX_LEN}
+                      rows={2}
+                      className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                    />
+                  </div>
                   <p className="text-right text-[10px] text-gray-500">{projectDraft.notes.length}/{NOTES_MAX_LEN}</p>
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -330,32 +340,43 @@ export default function BusinessPage() {
                 <p className="text-sm font-medium text-white">Add your first project or shortcut</p>
               </div>
             )}
-            <input
-              value={newProject.name}
-              onChange={(e) => setNewProject((s) => ({ ...s, name: e.target.value }))}
-              placeholder="Name — this is what shows on the Dashboard tile (e.g. Arun's Gmail)"
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
-            />
-            <input
-              value={newProject.projectType}
-              onChange={(e) => setNewProject((s) => ({ ...s, projectType: e.target.value }))}
-              placeholder="Type (e.g. SaaS product, Link)"
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-            />
-            <input
-              value={newProject.url}
-              onChange={(e) => setNewProject((s) => ({ ...s, url: e.target.value }))}
-              placeholder="URL"
-              className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-            />
-            <textarea
-              value={newProject.notes}
-              onChange={(e) => setNewProject((s) => ({ ...s, notes: e.target.value.slice(0, NOTES_MAX_LEN) }))}
-              placeholder="Short description (optional)"
-              maxLength={NOTES_MAX_LEN}
-              rows={2}
-              className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
-            />
+            <div>
+              <label className="mb-1 block text-[11px] text-gray-500">Name</label>
+              <input
+                value={newProject.name}
+                onChange={(e) => setNewProject((s) => ({ ...s, name: e.target.value }))}
+                placeholder="What shows on the Dashboard tile, e.g. Arun's Gmail"
+                className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-gray-500">Type</label>
+              <input
+                value={newProject.projectType}
+                onChange={(e) => setNewProject((s) => ({ ...s, projectType: e.target.value }))}
+                placeholder="e.g. SaaS product, Link"
+                className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-gray-500">URL</label>
+              <input
+                value={newProject.url}
+                onChange={(e) => setNewProject((s) => ({ ...s, url: e.target.value }))}
+                className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-gray-500">Description</label>
+              <textarea
+                value={newProject.notes}
+                onChange={(e) => setNewProject((s) => ({ ...s, notes: e.target.value.slice(0, NOTES_MAX_LEN) }))}
+                placeholder="Optional"
+                maxLength={NOTES_MAX_LEN}
+                rows={2}
+                className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+              />
+            </div>
             <button type="button" onClick={addProject} className="flex w-full items-center justify-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add project
             </button>

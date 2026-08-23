@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
+import DatePicker from "@/components/DatePicker";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
 import { useSchemesSynced } from "@/lib/supabase/useSchemesSynced";
@@ -401,9 +402,19 @@ export default function FinancePage() {
   // "0" next to another blank "0" is meaningless. Every editable numeric/
   // select field gets a persistent micro-label instead of relying on
   // placeholder text.
-  const Field = ({ label, children, dark }: { label: string; children: React.ReactNode; dark?: boolean }) => (
+  const Field = ({ label, children, dark, hint }: { label: string; children: React.ReactNode; dark?: boolean; hint?: string }) => (
     <label className="flex flex-col gap-0.5">
-      <span className={`text-[9px] font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>{label}</span>
+      <span className={`flex items-center gap-1 text-[9px] font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>
+        {label}
+        {hint && (
+          <span
+            title={hint}
+            className={`flex h-3 w-3 shrink-0 cursor-help items-center justify-center rounded-full text-[8px] normal-case leading-none ${dark ? "bg-white/20 text-white/80" : "bg-white/10 text-gray-400"}`}
+          >
+            ?
+          </span>
+        )}
+      </span>
       {children}
     </label>
   );
@@ -831,18 +842,22 @@ export default function FinancePage() {
             )}
             {fAccounts.length === 0 && <p className="text-xs text-gray-500">No accounts for this filter.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newAccount.ownerId} onChange={(v) => setNewAccount((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Account name" value={newAccount.name} onChange={(e) => setNewAccount((s) => ({ ...s, name: e.target.value }))} className={inputCls} />
-            <select value={newAccount.type} onChange={(e) => setNewAccount((s) => ({ ...s, type: e.target.value as "bank" | "bnpl" }))} className={selectCls}>
-              <option value="bank">Bank</option>
-              <option value="bnpl">BNPL</option>
-            </select>
-            <select value={newAccount.currency} onChange={(e) => setNewAccount((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
-            <input placeholder="Balance" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className={smallInputCls} />
-            <input placeholder="Bank URL (optional)" value={newAccount.bankUrl} onChange={(e) => setNewAccount((s) => ({ ...s, bankUrl: e.target.value }))} className={inputCls} />
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newAccount.ownerId} onChange={(v) => setNewAccount((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Account name"><input placeholder="e.g. Emirates NBD current" value={newAccount.name} onChange={(e) => setNewAccount((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Type">
+              <select value={newAccount.type} onChange={(e) => setNewAccount((s) => ({ ...s, type: e.target.value as "bank" | "bnpl" }))} className={selectCls}>
+                <option value="bank">Bank</option>
+                <option value="bnpl">BNPL</option>
+              </select>
+            </Field>
+            <Field label="Currency">
+              <select value={newAccount.currency} onChange={(e) => setNewAccount((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
+              </select>
+            </Field>
+            <Field label="Balance"><input placeholder="0" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className={smallInputCls} /></Field>
+            <Field label="Bank URL" hint="Optional — lets the account show a quick link to your bank's login page."><input placeholder="https:// (optional)" value={newAccount.bankUrl} onChange={(e) => setNewAccount((s) => ({ ...s, bankUrl: e.target.value }))} className={inputCls} /></Field>
             <button type="button" onClick={addAccount} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -902,7 +917,7 @@ export default function FinancePage() {
                           <Field label="Limit used" dark><input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                           <Field label="Outstanding" dark><input type="number" value={cardDraft.outstanding} onChange={(e) => setCardDraft({ ...cardDraft, outstanding: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                           <Field label="APR %" dark><input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
-                          <Field label="EMI months (0=none)" dark><input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="EMI months" dark hint="Number of months you're paying the outstanding balance off over on an installment plan. Leave at 0 if it's just a regular revolving balance with no fixed payoff date."><input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                           <Field label="Owner" dark><OwnerSelect value={cardDraft.ownerId} onChange={(v) => setCardDraft({ ...cardDraft, ownerId: v })} /></Field>
                         </div>
                         <div className="flex gap-2 pt-1">
@@ -935,7 +950,7 @@ export default function FinancePage() {
                             </div>
                           ))}
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <input placeholder="Label" value={draft.label} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, label: e.target.value } }))} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
+                            <input placeholder="Add a spend: label" value={draft.label} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, label: e.target.value } }))} className="min-w-0 flex-1 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
                             <input placeholder="Amt" type="number" value={draft.amount} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, amount: e.target.value } }))} className="w-16 rounded-lg bg-white/10 px-2 py-1 text-white outline-none placeholder:text-white/50" />
                             <select value={draft.currency} onChange={(e) => setSpendDraft((p) => ({ ...p, [c.id]: { ...draft, currency: e.target.value as Currency } }))} className="rounded-lg bg-white/10 px-1.5 py-1 text-white outline-none">
                               <option className="text-black">AED</option><option className="text-black">LKR</option><option className="text-black">USD</option>
@@ -955,26 +970,32 @@ export default function FinancePage() {
             })}
             {fCards.length === 0 && <p className="text-xs text-gray-500">No cards for this filter.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newCard.ownerId} onChange={(v) => setNewCard((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Card name" value={newCard.name} onChange={(e) => setNewCard((s) => ({ ...s, name: e.target.value }))} className={inputCls} />
-            <select value={newCard.network} onChange={(e) => setNewCard((s) => ({ ...s, network: e.target.value as CardAcct["network"] }))} className={selectCls}>
-              <option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="other">Other</option>
-            </select>
-            <select value={newCard.accountKind} onChange={(e) => setNewCard((s) => ({ ...s, accountKind: e.target.value as AccountKind }))} className={selectCls}>
-              {(Object.keys(ACCOUNT_KIND_LABEL) as AccountKind[]).map((k) => (
-                <option key={k} value={k}>{ACCOUNT_KIND_LABEL[k]}</option>
-              ))}
-            </select>
-            <input placeholder="Last 4" maxLength={4} value={newCard.last4} onChange={(e) => setNewCard((s) => ({ ...s, last4: e.target.value.replace(/\D/g, "") }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <select value={newCard.currency} onChange={(e) => setNewCard((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
-            <input placeholder="Credit limit" type="number" value={newCard.creditLimit} onChange={(e) => setNewCard((s) => ({ ...s, creditLimit: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Limit used" type="number" value={newCard.limitUsed} onChange={(e) => setNewCard((s) => ({ ...s, limitUsed: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Outstanding" type="number" value={newCard.outstanding} onChange={(e) => setNewCard((s) => ({ ...s, outstanding: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="APR %" type="number" value={newCard.interestRate} onChange={(e) => setNewCard((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="EMI months (0=none)" type="number" value={newCard.tenureMonths} onChange={(e) => setNewCard((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newCard.ownerId} onChange={(v) => setNewCard((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Card name"><input placeholder="e.g. Emirates NBD Visa" value={newCard.name} onChange={(e) => setNewCard((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Network">
+              <select value={newCard.network} onChange={(e) => setNewCard((s) => ({ ...s, network: e.target.value as CardAcct["network"] }))} className={selectCls}>
+                <option value="visa">Visa</option><option value="mastercard">Mastercard</option><option value="other">Other</option>
+              </select>
+            </Field>
+            <Field label="Account type">
+              <select value={newCard.accountKind} onChange={(e) => setNewCard((s) => ({ ...s, accountKind: e.target.value as AccountKind }))} className={selectCls}>
+                {(Object.keys(ACCOUNT_KIND_LABEL) as AccountKind[]).map((k) => (
+                  <option key={k} value={k}>{ACCOUNT_KIND_LABEL[k]}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Last 4"><input placeholder="1234" maxLength={4} value={newCard.last4} onChange={(e) => setNewCard((s) => ({ ...s, last4: e.target.value.replace(/\D/g, "") }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Currency">
+              <select value={newCard.currency} onChange={(e) => setNewCard((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
+              </select>
+            </Field>
+            <Field label="Credit limit"><input placeholder="0" type="number" value={newCard.creditLimit} onChange={(e) => setNewCard((s) => ({ ...s, creditLimit: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Limit used"><input placeholder="0" type="number" value={newCard.limitUsed} onChange={(e) => setNewCard((s) => ({ ...s, limitUsed: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Outstanding" hint="What you currently owe on this card — the balance interest/EMI is calculated on."><input placeholder="0" type="number" value={newCard.outstanding} onChange={(e) => setNewCard((s) => ({ ...s, outstanding: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="APR %"><input placeholder="0" type="number" value={newCard.interestRate} onChange={(e) => setNewCard((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="EMI months" hint="Number of months you're paying the outstanding balance off over on an installment plan. Leave at 0 if it's just a regular revolving balance with no fixed payoff date."><input placeholder="0" type="number" value={newCard.tenureMonths} onChange={(e) => setNewCard((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             <button type="button" onClick={addCard} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1003,8 +1024,8 @@ export default function FinancePage() {
                     </Field>
                     <Field label="Principal"><input type="number" value={loanDraft.principal} onChange={(e) => setLoanDraft({ ...loanDraft, principal: Number(e.target.value) })} className={smallInputCls} /></Field>
                     <Field label="APR %"><input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} className={smallInputCls} /></Field>
-                    <Field label="Tenure (mo)"><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
-                    <Field label="Start date"><input type="date" value={loanDraft.startDate} onChange={(e) => setLoanDraft({ ...loanDraft, startDate: e.target.value })} className={selectCls} /></Field>
+                    <Field label="Tenure (mo)" hint="Loan term in months — used to calculate your monthly EMI and count down to payoff. Loans always need a fixed term, so this can't be 0."><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="Start date"><DatePicker value={loanDraft.startDate} onChange={(v) => setLoanDraft({ ...loanDraft, startDate: v })} /></Field>
                     <Field label="Account #"><input value={loanDraft.accountNumber} onChange={(e) => setLoanDraft({ ...loanDraft, accountNumber: e.target.value })} className={inputCls} /></Field>
                     <button type="button" onClick={saveLoan} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingLoanId(null)} className={iconBtnCls}><X size={16} /></button>
@@ -1037,20 +1058,24 @@ export default function FinancePage() {
             })}
             {fLoans.length === 0 && <p className="text-xs text-gray-500">No loans logged.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newLoan.ownerId} onChange={(v) => setNewLoan((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Loan name" value={newLoan.name} onChange={(e) => setNewLoan((s) => ({ ...s, name: e.target.value }))} className={inputCls} />
-            <select value={newLoan.lenderType} onChange={(e) => setNewLoan((s) => ({ ...s, lenderType: e.target.value as Loan["lenderType"] }))} className={selectCls}>
-              <option value="bank">Bank</option><option value="person">Person</option><option value="institution">Institution</option>
-            </select>
-            <select value={newLoan.currency} onChange={(e) => setNewLoan((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
-            <input placeholder="Principal" type="number" value={newLoan.principal} onChange={(e) => setNewLoan((s) => ({ ...s, principal: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="APR %" type="number" value={newLoan.interestRate} onChange={(e) => setNewLoan((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Tenure (mo)" type="number" value={newLoan.tenureMonths} onChange={(e) => setNewLoan((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input type="date" value={newLoan.startDate} onChange={(e) => setNewLoan((s) => ({ ...s, startDate: e.target.value }))} className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Account # (optional)" value={newLoan.accountNumber} onChange={(e) => setNewLoan((s) => ({ ...s, accountNumber: e.target.value }))} className={inputCls} />
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newLoan.ownerId} onChange={(v) => setNewLoan((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Loan name"><input placeholder="e.g. Car loan" value={newLoan.name} onChange={(e) => setNewLoan((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Lender type">
+              <select value={newLoan.lenderType} onChange={(e) => setNewLoan((s) => ({ ...s, lenderType: e.target.value as Loan["lenderType"] }))} className={selectCls}>
+                <option value="bank">Bank</option><option value="person">Person</option><option value="institution">Institution</option>
+              </select>
+            </Field>
+            <Field label="Currency">
+              <select value={newLoan.currency} onChange={(e) => setNewLoan((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
+              </select>
+            </Field>
+            <Field label="Principal" hint="The original loan amount borrowed."><input placeholder="0" type="number" value={newLoan.principal} onChange={(e) => setNewLoan((s) => ({ ...s, principal: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="APR %"><input placeholder="0" type="number" value={newLoan.interestRate} onChange={(e) => setNewLoan((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Tenure (mo)" hint="Loan term in months — used to calculate your monthly EMI and count down to payoff. Loans always need a fixed term, so this can't be 0."><input placeholder="e.g. 36" type="number" value={newLoan.tenureMonths} onChange={(e) => setNewLoan((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Start date"><DatePicker value={newLoan.startDate} onChange={(v) => setNewLoan((s) => ({ ...s, startDate: v }))} /></Field>
+            <Field label="Account #" hint="Optional reference number, just for your own notes."><input placeholder="optional" value={newLoan.accountNumber} onChange={(e) => setNewLoan((s) => ({ ...s, accountNumber: e.target.value }))} className={inputCls} /></Field>
             <button type="button" onClick={addLoan} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1118,19 +1143,21 @@ export default function FinancePage() {
                       );
                     })}
                     {sc.items.length === 0 && <p className="text-xs text-gray-500">No line items yet.</p>}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <input placeholder="Line item (e.g. Exam fee)" value={d.label} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, label: e.target.value } }))} className={inputCls} />
-                      <input placeholder="Amount" type="number" value={d.amount} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, amount: e.target.value } }))} className={smallInputCls} />
-                      <select value={d.cadence} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, cadence: e.target.value as SchemeCadence } }))} className={selectCls}>
-                        <option value="onetime">One-time</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="termly">Termly</option>
-                        <option value="yearly">Yearly</option>
-                      </select>
+                    <div className="mt-2 flex flex-wrap items-end gap-1.5">
+                      <Field label="Line item"><input placeholder="e.g. Exam fee" value={d.label} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, label: e.target.value } }))} className={inputCls} /></Field>
+                      <Field label="Amount"><input placeholder="0" type="number" value={d.amount} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, amount: e.target.value } }))} className={smallInputCls} /></Field>
+                      <Field label="Cadence">
+                        <select value={d.cadence} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, cadence: e.target.value as SchemeCadence } }))} className={selectCls}>
+                          <option value="onetime">One-time</option>
+                          <option value="monthly">Monthly</option>
+                          <option value="termly">Termly</option>
+                          <option value="yearly">Yearly</option>
+                        </select>
+                      </Field>
                       {d.cadence === "monthly" ? (
-                        <input type="number" min={1} max={31} placeholder="Billing day" value={d.billingDay} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, billingDay: e.target.value } }))} className={smallInputCls} />
+                        <Field label="Billing day"><input type="number" min={1} max={31} placeholder="1-31" value={d.billingDay} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, billingDay: e.target.value } }))} className={smallInputCls} /></Field>
                       ) : (
-                        <input type="date" value={d.dueDate} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, dueDate: e.target.value } }))} className={selectCls} />
+                        <Field label="Due date"><DatePicker value={d.dueDate} onChange={(v) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, dueDate: v } }))} /></Field>
                       )}
                       <button type="button" onClick={() => addSchemeItem(sc.id)} className="flex items-center gap-1 rounded-xl bg-accent-purple/80 px-3 py-2 text-xs text-white">
                         <Plus size={12} /> Add line
@@ -1142,13 +1169,15 @@ export default function FinancePage() {
             })}
             {fSchemes.length === 0 && <p className="text-xs text-gray-500">No payment schemes for this filter.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newScheme.ownerId} onChange={(v) => setNewScheme((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Scheme name (e.g. MBA — Term 3)" value={newScheme.name} onChange={(e) => setNewScheme((s) => ({ ...s, name: e.target.value }))} className={inputCls} />
-            <input placeholder="Institution" value={newScheme.institution} onChange={(e) => setNewScheme((s) => ({ ...s, institution: e.target.value }))} className={inputCls} />
-            <select value={newScheme.currency} onChange={(e) => setNewScheme((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newScheme.ownerId} onChange={(v) => setNewScheme((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Scheme name" hint="A plan with several irregular payments — e.g. a course with a termly fee plus one-off exam fees. Add each payment as a line item below once created."><input placeholder="e.g. MBA — Term 3" value={newScheme.name} onChange={(e) => setNewScheme((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Institution"><input placeholder="optional" value={newScheme.institution} onChange={(e) => setNewScheme((s) => ({ ...s, institution: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Currency">
+              <select value={newScheme.currency} onChange={(e) => setNewScheme((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
+              </select>
+            </Field>
             <button type="button" onClick={addScheme} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add scheme
             </button>
@@ -1179,16 +1208,18 @@ export default function FinancePage() {
                     {subDraft.cadence === "monthly" ? (
                       <Field label="Billing day"><input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} /></Field>
                     ) : (
-                      <Field label="Next date"><input type="date" value={subDraft.nextDate} onChange={(e) => setSubDraft({ ...subDraft, nextDate: e.target.value })} className={selectCls} /></Field>
+                      <Field label="Next date"><DatePicker value={subDraft.nextDate} onChange={(v) => setSubDraft({ ...subDraft, nextDate: v })} /></Field>
                     )}
-                    <Field label="Tax %"><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
-                    <Field label="Tenure (mo, 0=none)"><input type="number" value={subDraft.tenureMonths} onChange={(e) => setSubDraft({ ...subDraft, tenureMonths: Number(e.target.value) })} className="w-20 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
-                    <Field label="Notes"><input placeholder="e.g. extra interest-on-minimum" value={subDraft.notes} onChange={(e) => setSubDraft({ ...subDraft, notes: e.target.value })} className={inputCls} /></Field>
-                    <Field label="Temp override amount (blank = none)">
-                      <input type="number" placeholder="e.g. Tabby spike" value={subDraft.elevatedAmount ?? ""} onChange={(e) => setSubDraft({ ...subDraft, elevatedAmount: e.target.value === "" ? null : Number(e.target.value) })} className={smallInputCls} />
+                    <Field label="Tax %" hint="VAT or other tax added on top of the amount each cycle."><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
+                    <Field label="Tenure (mo)" hint="Leave at 0 for an ongoing subscription that repeats every cycle with no end date (most subs). Enter a number of months only if this is a fixed-length contract that should show a countdown, e.g. 20 for a 20-month plan.">
+                      <input type="number" value={subDraft.tenureMonths} onChange={(e) => setSubDraft({ ...subDraft, tenureMonths: Number(e.target.value) })} className="w-20 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" />
                     </Field>
-                    <Field label="Override effective until">
-                      <input type="date" value={subDraft.effectiveUntil} onChange={(e) => setSubDraft({ ...subDraft, effectiveUntil: e.target.value })} className={selectCls} />
+                    <Field label="Notes"><input placeholder="e.g. extra interest-on-minimum" value={subDraft.notes} onChange={(e) => setSubDraft({ ...subDraft, notes: e.target.value })} className={inputCls} /></Field>
+                    <Field label="Temp override amount" hint="Only fill this in if the amount charged is temporarily different from usual (e.g. a spike). Leave blank the rest of the time — the normal Amount above keeps being used.">
+                      <input type="number" placeholder="blank = none" value={subDraft.elevatedAmount ?? ""} onChange={(e) => setSubDraft({ ...subDraft, elevatedAmount: e.target.value === "" ? null : Number(e.target.value) })} className={smallInputCls} />
+                    </Field>
+                    <Field label="Override until" hint="The last date the temporary override amount applies. After this date it automatically reverts to the normal Amount — you don't need to remove it manually.">
+                      <DatePicker value={subDraft.effectiveUntil} onChange={(v) => setSubDraft({ ...subDraft, effectiveUntil: v })} />
                     </Field>
                     <button type="button" onClick={saveSub} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingSubId(null)} className={iconBtnCls}><X size={16} /></button>
@@ -1210,7 +1241,7 @@ export default function FinancePage() {
                     </p>
                     <p className="text-xs text-gray-500">
                       {s.cadence} · {ownerName(s.ownerId)} · {formatMoney(monthlySubCost(s), s.currency)}/mo equiv.
-                      {s.tenureMonths > 0 ? ` · ${s.tenureMonths}mo contract` : ""}
+                      {s.tenureMonths > 0 ? ` · ${s.tenureMonths}mo contract` : " · ongoing"}
                     </p>
                     {s.notes && <p className="mt-0.5 text-xs italic text-gray-500">{s.notes}</p>}
                   </div>
@@ -1227,23 +1258,29 @@ export default function FinancePage() {
             })}
             {fSubs.length === 0 && <p className="text-xs text-gray-500">No subscriptions for this filter.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newSub.ownerId} onChange={(v) => setNewSub((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Provider" value={newSub.provider} onChange={(e) => setNewSub((s) => ({ ...s, provider: e.target.value }))} className={inputCls} />
-            <input placeholder="Amount" type="number" value={newSub.amount} onChange={(e) => setNewSub((s) => ({ ...s, amount: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <select value={newSub.currency} onChange={(e) => setNewSub((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
-            <select value={newSub.cadence} onChange={(e) => setNewSub((s) => ({ ...s, cadence: e.target.value as Sub["cadence"] }))} className={selectCls}>
-              <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
-            </select>
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newSub.ownerId} onChange={(v) => setNewSub((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Provider"><input placeholder="e.g. Netflix" value={newSub.provider} onChange={(e) => setNewSub((s) => ({ ...s, provider: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Amount"><input placeholder="0" type="number" value={newSub.amount} onChange={(e) => setNewSub((s) => ({ ...s, amount: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Currency">
+              <select value={newSub.currency} onChange={(e) => setNewSub((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
+              </select>
+            </Field>
+            <Field label="Cadence">
+              <select value={newSub.cadence} onChange={(e) => setNewSub((s) => ({ ...s, cadence: e.target.value as Sub["cadence"] }))} className={selectCls}>
+                <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+              </select>
+            </Field>
             {newSub.cadence === "monthly" ? (
-              <input placeholder="Billing day" type="number" min={1} max={31} value={newSub.billingDay} onChange={(e) => setNewSub((s) => ({ ...s, billingDay: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+              <Field label="Billing day"><input placeholder="1-31" type="number" min={1} max={31} value={newSub.billingDay} onChange={(e) => setNewSub((s) => ({ ...s, billingDay: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             ) : (
-              <input type="date" value={newSub.nextDate} onChange={(e) => setNewSub((s) => ({ ...s, nextDate: e.target.value }))} className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+              <Field label="Next date"><DatePicker value={newSub.nextDate} onChange={(v) => setNewSub((s) => ({ ...s, nextDate: v }))} /></Field>
             )}
-            <input placeholder="Tax %" type="number" value={newSub.taxPct} onChange={(e) => setNewSub((s) => ({ ...s, taxPct: e.target.value }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Tenure mo (0=none)" type="number" value={newSub.tenureMonths} onChange={(e) => setNewSub((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+            <Field label="Tax %"><input placeholder="0" type="number" value={newSub.taxPct} onChange={(e) => setNewSub((s) => ({ ...s, taxPct: e.target.value }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Tenure (mo)" hint="Leave at 0 for an ongoing subscription that repeats every cycle with no end date (most subs). Enter a number of months only if this is a fixed-length contract that should show a countdown, e.g. 20 for a 20-month plan.">
+              <input placeholder="0 = ongoing" type="number" value={newSub.tenureMonths} onChange={(e) => setNewSub((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+            </Field>
             <button type="button" onClick={addSub} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1270,7 +1307,7 @@ export default function FinancePage() {
                         <option>AED</option><option>LKR</option><option>USD</option>
                       </select>
                     </Field>
-                    <Field label="Recurring?">
+                    <Field label="Recurring?" hint="Recurring income counts toward the Spending Plan banner above. One-off (bonuses, gifts) doesn't.">
                       <select value={incomeDraft.isRecurring ? "yes" : "no"} onChange={(e) => setIncomeDraft({ ...incomeDraft, isRecurring: e.target.value === "yes" })} className={selectCls}>
                         <option value="yes">Recurring</option><option value="no">One-off</option>
                       </select>
@@ -1282,7 +1319,7 @@ export default function FinancePage() {
                         </select>
                       </Field>
                     )}
-                    <Field label="Received"><input type="date" value={incomeDraft.receivedDate} onChange={(e) => setIncomeDraft({ ...incomeDraft, receivedDate: e.target.value })} className={selectCls} /></Field>
+                    <Field label="Received"><DatePicker value={incomeDraft.receivedDate} onChange={(v) => setIncomeDraft({ ...incomeDraft, receivedDate: v })} /></Field>
                     <Field label="Notes"><input value={incomeDraft.notes} onChange={(e) => setIncomeDraft({ ...incomeDraft, notes: e.target.value })} className={inputCls} /></Field>
                     <button type="button" onClick={saveIncome} className="text-accent-green hover:text-white"><Check size={16} /></button>
                     <button type="button" onClick={() => setEditingIncomeId(null)} className={iconBtnCls}><X size={16} /></button>
@@ -1309,23 +1346,29 @@ export default function FinancePage() {
             })}
             {fIncome.length === 0 && <p className="text-xs text-gray-500">No income sources for this filter.</p>}
           </div>
-          <div className="relative z-10 mt-4 flex flex-wrap gap-2 border-t border-base-border pt-4">
-            <OwnerSelect value={newIncome.ownerId} onChange={(v) => setNewIncome((s) => ({ ...s, ownerId: v }))} />
-            <input placeholder="Source (e.g. Salary)" value={newIncome.source} onChange={(e) => setNewIncome((s) => ({ ...s, source: e.target.value }))} className={inputCls} />
-            <input placeholder="Type" value={newIncome.incomeType} onChange={(e) => setNewIncome((s) => ({ ...s, incomeType: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <input placeholder="Amount" type="number" value={newIncome.amount} onChange={(e) => setNewIncome((s) => ({ ...s, amount: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-            <select value={newIncome.currency} onChange={(e) => setNewIncome((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-              <option>AED</option><option>LKR</option><option>USD</option>
-            </select>
-            <select value={newIncome.isRecurring ? "yes" : "no"} onChange={(e) => setNewIncome((s) => ({ ...s, isRecurring: e.target.value === "yes" }))} className={selectCls}>
-              <option value="yes">Recurring</option><option value="no">One-off</option>
-            </select>
-            {newIncome.isRecurring && (
-              <select value={newIncome.cadence} onChange={(e) => setNewIncome((s) => ({ ...s, cadence: e.target.value as Income["cadence"] }))} className={selectCls}>
-                <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+          <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
+            <Field label="Owner"><OwnerSelect value={newIncome.ownerId} onChange={(v) => setNewIncome((s) => ({ ...s, ownerId: v }))} /></Field>
+            <Field label="Source"><input placeholder="e.g. Salary" value={newIncome.source} onChange={(e) => setNewIncome((s) => ({ ...s, source: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Type"><input placeholder="optional" value={newIncome.incomeType} onChange={(e) => setNewIncome((s) => ({ ...s, incomeType: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Amount"><input placeholder="0" type="number" value={newIncome.amount} onChange={(e) => setNewIncome((s) => ({ ...s, amount: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Currency">
+              <select value={newIncome.currency} onChange={(e) => setNewIncome((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                <option>AED</option><option>LKR</option><option>USD</option>
               </select>
+            </Field>
+            <Field label="Recurring?" hint="Recurring income counts toward the Spending Plan banner above. One-off (bonuses, gifts) doesn't.">
+              <select value={newIncome.isRecurring ? "yes" : "no"} onChange={(e) => setNewIncome((s) => ({ ...s, isRecurring: e.target.value === "yes" }))} className={selectCls}>
+                <option value="yes">Recurring</option><option value="no">One-off</option>
+              </select>
+            </Field>
+            {newIncome.isRecurring && (
+              <Field label="Cadence">
+                <select value={newIncome.cadence} onChange={(e) => setNewIncome((s) => ({ ...s, cadence: e.target.value as Income["cadence"] }))} className={selectCls}>
+                  <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+                </select>
+              </Field>
             )}
-            <input type="date" value={newIncome.receivedDate} onChange={(e) => setNewIncome((s) => ({ ...s, receivedDate: e.target.value }))} className="rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
+            <Field label="Received"><DatePicker value={newIncome.receivedDate} onChange={(v) => setNewIncome((s) => ({ ...s, receivedDate: v }))} /></Field>
             <button type="button" onClick={addIncome} className="flex items-center gap-1 rounded-xl bg-accent-green px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add income
             </button>
@@ -1351,8 +1394,8 @@ export default function FinancePage() {
                   <option>AED</option><option>LKR</option><option>USD</option>
                 </select>
               </Field>
-              <Field label="By date"><input type="date" value={newGoal.targetDate} onChange={(e) => setNewGoal((s) => ({ ...s, targetDate: e.target.value }))} className={selectCls} /></Field>
-              <Field label="Visibility">
+              <Field label="By date"><DatePicker value={newGoal.targetDate} onChange={(v) => setNewGoal((s) => ({ ...s, targetDate: v }))} /></Field>
+              <Field label="Visibility" hint="Private = only you can see this goal and its progress. Shared = your household can see it too, but only you can edit or log savings toward it.">
                 <select value={newGoal.visibility} onChange={(e) => setNewGoal((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
                   <option value="private">Private (only me)</option>
                   <option value="shared_view">Shared with household</option>
@@ -1371,8 +1414,8 @@ export default function FinancePage() {
                   <option>AED</option><option>LKR</option><option>USD</option>
                 </select>
               </Field>
-              <Field label="By date"><input type="date" value={goalDraft.targetDate} onChange={(e) => setGoalDraft((s) => ({ ...s, targetDate: e.target.value }))} className={selectCls} /></Field>
-              <Field label="Visibility">
+              <Field label="By date"><DatePicker value={goalDraft.targetDate} onChange={(v) => setGoalDraft((s) => ({ ...s, targetDate: v }))} /></Field>
+              <Field label="Visibility" hint="Private = only you can see this goal and its progress. Shared = your household can see it too, but only you can edit or log savings toward it.">
                 <select value={goalDraft.visibility} onChange={(e) => setGoalDraft((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
                   <option value="private">Private (only me)</option>
                   <option value="shared_view">Shared with household</option>
@@ -1487,7 +1530,7 @@ export default function FinancePage() {
                     <Field label="Owner"><OwnerSelect value={expenseDraft.ownerId} onChange={(v) => setExpenseDraft({ ...expenseDraft, ownerId: v })} /></Field>
                     <Field label="Label"><input value={expenseDraft.label} onChange={(ev) => setExpenseDraft({ ...expenseDraft, label: ev.target.value })} className={inputCls} /></Field>
                     <Field label="Category"><input value={expenseDraft.category} onChange={(ev) => setExpenseDraft({ ...expenseDraft, category: ev.target.value })} className="w-28 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
-                    <Field label="Type">
+                    <Field label="Type" hint="Monthly recurring = repeats every month like a subscription. Fixed-term = active only between a start and end date. One-off = a single payment due once.">
                       <select value={expenseDraft.expenseType} onChange={(ev) => setExpenseDraft({ ...expenseDraft, expenseType: ev.target.value as ExpenseType })} className={selectCls}>
                         <option value="monthly">Monthly recurring</option><option value="fixed_term">Fixed-term</option><option value="one_off">One-off</option>
                       </select>
@@ -1503,13 +1546,13 @@ export default function FinancePage() {
                     )}
                     {expenseDraft.expenseType === "fixed_term" && (
                       <>
-                        <Field label="Start"><input type="date" value={expenseDraft.startDate} onChange={(ev) => setExpenseDraft({ ...expenseDraft, startDate: ev.target.value })} className={selectCls} /></Field>
-                        <Field label="End"><input type="date" value={expenseDraft.endDate} onChange={(ev) => setExpenseDraft({ ...expenseDraft, endDate: ev.target.value })} className={selectCls} /></Field>
+                        <Field label="Start"><DatePicker value={expenseDraft.startDate} onChange={(v) => setExpenseDraft({ ...expenseDraft, startDate: v })} /></Field>
+                        <Field label="End"><DatePicker value={expenseDraft.endDate} onChange={(v) => setExpenseDraft({ ...expenseDraft, endDate: v })} /></Field>
                       </>
                     )}
                     {expenseDraft.expenseType === "one_off" && (
                       <>
-                        <Field label="Due date"><input type="date" value={expenseDraft.dueDate} onChange={(ev) => setExpenseDraft({ ...expenseDraft, dueDate: ev.target.value })} className={selectCls} /></Field>
+                        <Field label="Due date"><DatePicker value={expenseDraft.dueDate} onChange={(v) => setExpenseDraft({ ...expenseDraft, dueDate: v })} /></Field>
                         <Field label="Paid?">
                           <select value={expenseDraft.paid ? "yes" : "no"} onChange={(ev) => setExpenseDraft({ ...expenseDraft, paid: ev.target.value === "yes" })} className={selectCls}>
                             <option value="no">Unpaid</option><option value="yes">Paid</option>
@@ -1558,16 +1601,20 @@ export default function FinancePage() {
             {fExpenses.length === 0 && <p className="text-xs text-gray-500">No expenses for this filter yet.</p>}
           </div>
           <div className="relative z-10 mt-4 space-y-2 border-t border-base-border pt-4">
-            <div className="flex flex-wrap gap-2">
-              <OwnerSelect value={newExpense.ownerId} onChange={(v) => setNewExpense((s) => ({ ...s, ownerId: v }))} />
-              <input placeholder="Label (e.g. Car registration renewal)" value={newExpense.label} onChange={(e) => setNewExpense((s) => ({ ...s, label: e.target.value }))} className={inputCls} />
-              <input placeholder="Category" value={newExpense.category} onChange={(e) => setNewExpense((s) => ({ ...s, category: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
-              <select value={newExpense.expenseType} onChange={(e) => setNewExpense((s) => ({ ...s, expenseType: e.target.value as ExpenseType }))} className={selectCls}>
-                <option value="monthly">Monthly recurring</option><option value="fixed_term">Fixed-term</option><option value="one_off">One-off</option>
-              </select>
-              <select value={newExpense.currency} onChange={(e) => setNewExpense((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
-                <option>AED</option><option>LKR</option><option>USD</option>
-              </select>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Owner"><OwnerSelect value={newExpense.ownerId} onChange={(v) => setNewExpense((s) => ({ ...s, ownerId: v }))} /></Field>
+              <Field label="Label"><input placeholder="e.g. Car registration renewal" value={newExpense.label} onChange={(e) => setNewExpense((s) => ({ ...s, label: e.target.value }))} className={inputCls} /></Field>
+              <Field label="Category"><input placeholder="optional" value={newExpense.category} onChange={(e) => setNewExpense((s) => ({ ...s, category: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+              <Field label="Type" hint="Monthly recurring = repeats every month like a subscription. Fixed-term = active only between a start and end date. One-off = a single payment due once.">
+                <select value={newExpense.expenseType} onChange={(e) => setNewExpense((s) => ({ ...s, expenseType: e.target.value as ExpenseType }))} className={selectCls}>
+                  <option value="monthly">Monthly recurring</option><option value="fixed_term">Fixed-term</option><option value="one_off">One-off</option>
+                </select>
+              </Field>
+              <Field label="Currency">
+                <select value={newExpense.currency} onChange={(e) => setNewExpense((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                  <option>AED</option><option>LKR</option><option>USD</option>
+                </select>
+              </Field>
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <label className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -1588,12 +1635,12 @@ export default function FinancePage() {
               )}
               {newExpense.expenseType === "fixed_term" && (
                 <>
-                  <Field label="Start"><input type="date" value={newExpense.startDate} onChange={(e) => setNewExpense((s) => ({ ...s, startDate: e.target.value }))} className={selectCls} /></Field>
-                  <Field label="End"><input type="date" value={newExpense.endDate} onChange={(e) => setNewExpense((s) => ({ ...s, endDate: e.target.value }))} className={selectCls} /></Field>
+                  <Field label="Start"><DatePicker value={newExpense.startDate} onChange={(v) => setNewExpense((s) => ({ ...s, startDate: v }))} /></Field>
+                  <Field label="End"><DatePicker value={newExpense.endDate} onChange={(v) => setNewExpense((s) => ({ ...s, endDate: v }))} /></Field>
                 </>
               )}
               {newExpense.expenseType === "one_off" && (
-                <Field label="Due date"><input type="date" value={newExpense.dueDate} onChange={(e) => setNewExpense((s) => ({ ...s, dueDate: e.target.value }))} className={selectCls} /></Field>
+                <Field label="Due date"><DatePicker value={newExpense.dueDate} onChange={(v) => setNewExpense((s) => ({ ...s, dueDate: v }))} /></Field>
               )}
               <Field label="Notes"><input value={newExpense.notes} onChange={(e) => setNewExpense((s) => ({ ...s, notes: e.target.value }))} className={inputCls} /></Field>
               <button type="button" onClick={addExpense} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">

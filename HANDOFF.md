@@ -4,8 +4,11 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-23, by Claude Cowork (bug fix + Business Projects/Dashboard rework +
-new Savings Goals feature — code delivered to Coco's machine, NOT yet committed/pushed by him).
+Last touched: 2026-08-23, by Claude Cowork (data-loss root-cause fix + themed DatePicker +
+app-wide add-row label audit + new standing Form/Data-Entry rule in CLAUDE.md/AGENTS.md — code
+delivered to Coco's machine, NOT yet committed/pushed by him). This is a SEPARATE, LATER
+session than the "bug fix + Business Projects/Dashboard rework + Savings Goals" work described
+below — that work is still queued for Coco to push; nothing in it was touched this session.
 
 ---
 
@@ -50,9 +53,42 @@ with what you shipped, its verification status, and what should happen next.
 
 ---
 
-## What was just shipped
+## What was just shipped (this session, 2026-08-23, later in the day)
 
-**Code delivered to Coco's machine this session (2026-08-23) — build-verified (`tsc --noEmit`
+**Code delivered to Coco's machine — verified only with a Babel parser (JSX+TS plugins) for
+syntax validity, NOT a full `tsc`/`next build`** (no node_modules/full repo available
+in-session) **and NOT YET committed/pushed.** Full detail:
+[[project_hari_data_loss_and_ux_audit]] in memory. Summary:
+
+1. **Data-loss root-cause fix.** User reported adding 3 allergy entries, refreshing, and losing
+   them all. Root cause: `lib/supabase/useSupabaseSynced.ts` (shared by nearly every CRUD
+   module) fired Supabase writes without awaiting/queueing them and with no protection against
+   navigating away mid-write. Fixed with a write-queue + self-healing recovery-on-mount +
+   a new shared status store `lib/supabase/syncStatus.ts` (also wired into `useSchemesSynced.ts`
+   and `useSavingsGoal.ts`) + a global `<SaveStatusIndicator />` (mounted in `app/layout.tsx`)
+   that shows "Saving…" / "Couldn't save N changes" so failures are never silently invisible
+   again. **Not yet confirmed by Coco that the original symptom is actually gone.**
+2. **New themed `DatePicker` component** (`components/DatePicker.tsx`) replacing every raw
+   `<input type="date">` (30 occurrences across `finance`, `health`, `fitness`, `memberships`
+   pages) — fixes the native control's broken year-typing and gives a dark-blue/white,
+   handheld-friendly dropdown instead of an unstylable OS calendar popup.
+3. **Add-row label audit extended app-wide** (previously Finance-only, see
+   [[project_hari_finance_ux_labels]]). Found and fixed the same "edit row has labels, add row
+   doesn't" anti-pattern in `app/health/page.tsx` (Conditions, Appointments — had zero labels),
+   `app/fitness/page.tsx` (Measurements, Cycle Tracker), and `app/business/page.tsx` (project
+   add/edit forms). Checked and already-compliant: Calendar, Settings, Vision pages,
+   Memberships.
+4. **New standing rule** — "Form & Data-Entry Standards" section added to `CLAUDE.md` (between
+   Coding Standards and Architecture Standards) + a restating bullet in `AGENTS.md` §6 so
+   Antigravity picks it up too: no unlabeled add-rows, one-line hover hints on ambiguous
+   fields, always use `DatePicker`, every new Supabase-sync hook must wire into
+   `syncStatus.ts`. This is meant to stop the above two categories of bug from recurring.
+
+---
+
+## Previously shipped (earlier 2026-08-23 session) — STILL queued for Coco to push
+
+**Code delivered to Coco's machine — build-verified (`tsc --noEmit`
 clean, `npm run build` succeeds, all 28 routes compile) but NOT YET committed/pushed.** Coco
 needs to review and push via GitHub Desktop for any of this to reach the live site.
 
@@ -117,6 +153,11 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
+0. **Coco pushes BOTH sessions' delivered files** — this session's (data-loss fix, DatePicker,
+   label audit, CLAUDE.md/AGENTS.md rule) AND the earlier session's (items 1-5 below) are both
+   sitting on disk uncommitted. First live check after pushing: reproduce the original bug
+   (add several items in a section, refresh, confirm nothing is lost) and click through the new
+   date pickers on mobile/handheld if possible.
 1. **Coco reviews and pushes the delivered files** via GitHub Desktop — nothing above is live
    until then. First live check afterward: Dashboard tiles, Business Projects pin toggle,
    Finance's new Savings Goal section, all under his own account and (if he can arrange it)

@@ -7,10 +7,24 @@
 // one to understand nesting. Same [value, setValue] signature as
 // useLocalStorage/useSupabaseSynced, so the Finance page's JSX/handlers
 // still don't need to change.
+//
+// Reliability (2026-08-23, same pass as useSupabaseSynced — see that file's
+// header for the full incident this came out of): writes are now queued
+// per hook instance instead of fired concurrently, and every write reports
+// into the shared syncStatus store so a refresh mid-save is guarded by a
+// beforeunload prompt and failures show up in the UI, not just the
+// console. Doesn't yet have useSupabaseSynced's reload-time recovery of
+// items an interrupted write dropped (the nested scheme+items shape makes
+// that merge meaningfully more code) — the queueing + beforeunload guard
+// already close most of the actual data-loss window, since the far more
+// common failure mode is "the tab closed while a request was still in
+// flight," not "the request permanently failed." Revisit if Payment
+// Schemes ever shows the same symptom Allergies did.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getOwnerMap } from "@/lib/supabase/ownerMap";
+import { beginWrite, clearError, reportError } from "@/lib/supabase/syncStatus";
 
 type SchemeCadence = "onetime" | "monthly" | "termly" | "yearly";
 type SchemeItem = { id: string; label: string; amount: number; cadence: SchemeCadence; dueDate: string; billingDay: number; paid: boolean };
@@ -31,6 +45,7 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
   const [ready, setReady] = useState(false);
   const lastSynced = useRef<Scheme[]>([]);
   const supabaseRef = useRef(createClient());
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     try {
@@ -88,16 +103,17 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
     const supabase = supabaseRef.current;
     const prev = lastSynced.current;
     const ownerMap = await getOwnerMap(supabase);
+    let hadFailure = false;
 
     const prevSchemeMap = new Map(prev.map((s) => [s.id, s]));
     const nextSchemeIds = new Set(next.map((s) => s.id));
     for (const [id] of prevSchemeMap) {
       if (!nextSchemeIds.has(id)) {
         // cascade: delete items first (no FK cascade defined for this pair), then the scheme
-        await supabase.from(ITEM_TABLE).delete().eq("scheme_id", id);
-        supabase.from(SCHEME_TABLE).delete().eq("id", id).then(({ error }) => {
-          if (error) console.error("[useSchemesSynced] scheme delete failed", error);
-        });
+        const { error: itemDelErr } = await supabase.from(ITEM_TABLE).delete().eq("scheme_id", id);
+        if (itemDelErr) { console.error("[useSchemesSynced] item cascade delete failed", itemDelErr); hadFailure = true; }
+        const { error: schemeDelErr } = await supabase.from(SCHEME_TABLE).delete().eq("id", id);
+        if (schemeDelErr) { console.error("[useSchemesSynced] scheme delete failed", schemeDelErr); hadFailure = true; }
       }
     }
 
@@ -110,12 +126,13 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         const { data, error } = await supabase.from(SCHEME_TABLE).insert(row).select("id").single();
         if (error) {
           console.error("[useSchemesSynced] scheme insert failed", error);
+          hadFailure = true;
           continue;
         }
         if (data?.id && data.id !== s.id) schemeIdPatches[s.id] = data.id;
       } else if (JSON.stringify(schemeToRow(prevS)) !== JSON.stringify(schemeToRow(s)) || prevS.ownerId !== s.ownerId) {
         const { error } = await supabase.from(SCHEME_TABLE).update(row).eq("id", s.id);
-        if (error) console.error("[useSchemesSynced] scheme update failed", error);
+        if (error) { console.error("[useSchemesSynced] scheme update failed", error); hadFailure = true; }
       }
     }
 
@@ -127,9 +144,8 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
 
     for (const [id] of prevItemMap) {
       if (!nextItemIds.has(id)) {
-        supabase.from(ITEM_TABLE).delete().eq("id", id).then(({ error }) => {
-          if (error) console.error("[useSchemesSynced] item delete failed", error);
-        });
+        const { error } = await supabase.from(ITEM_TABLE).delete().eq("id", id);
+        if (error) { console.error("[useSchemesSynced] item delete failed", error); hadFailure = true; }
       }
     }
 
@@ -142,12 +158,13 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         const { data, error } = await supabase.from(ITEM_TABLE).insert(row).select("id").single();
         if (error) {
           console.error("[useSchemesSynced] item insert failed", error);
+          hadFailure = true;
           continue;
         }
         if (data?.id && data.id !== it.id) itemIdPatches[it.id] = data.id;
       } else if (JSON.stringify(itemToRow(prevEntry.it, prevEntry.schemeId)) !== JSON.stringify(itemToRow(it, schemeId))) {
         const { error } = await supabase.from(ITEM_TABLE).update(row).eq("id", it.id);
-        if (error) console.error("[useSchemesSynced] item update failed", error);
+        if (error) { console.error("[useSchemesSynced] item update failed", error); hadFailure = true; }
       }
     }
 
@@ -157,6 +174,11 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
       items: s.items.map((it) => (itemIdPatches[it.id] ? { ...it, id: itemIdPatches[it.id] } : it)),
     }));
     lastSynced.current = resolved;
+    if (hadFailure) {
+      reportError("finance_payment_schemes", "Couldn't save some changes to Payment schemes — check your connection and try the edit again.");
+    } else {
+      clearError("finance_payment_schemes");
+    }
     if (Object.keys(schemeIdPatches).length > 0 || Object.keys(itemIdPatches).length > 0) {
       setValueState((cur) =>
         cur.map((s) => ({
@@ -168,6 +190,19 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
     }
   }, []);
 
+  const queueSync = useCallback(
+    (next: Scheme[]) => {
+      const endWrite = beginWrite();
+      queueRef.current = queueRef.current
+        .then(() => sync(next))
+        .catch((err) => {
+          console.error("[useSchemesSynced] sync failed", err);
+        })
+        .finally(() => endWrite());
+    },
+    [sync]
+  );
+
   const setValue = useCallback(
     (updater: Scheme[] | ((prev: Scheme[]) => Scheme[])) => {
       setValueState((prev) => {
@@ -177,11 +212,11 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         } catch {
           // storage full/unavailable
         }
-        if (ready) sync(next);
+        if (ready) queueSync(next);
         return next;
       });
     },
-    [localStorageKey, ready, sync]
+    [localStorageKey, ready, queueSync]
   );
 
   return [value, setValue, { ready }] as const;
