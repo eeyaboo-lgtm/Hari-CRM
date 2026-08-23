@@ -1,10 +1,17 @@
-// Shared type/storage-key/color-lookup for the Dashboard's customizable
-// Quick Launch shortcuts (Phase 0 backlog — previously hardcoded to
-// ShelfPulse/RetailSuite only). Editable in Settings, rendered on the
-// Dashboard — both import from here so they can never drift apart.
+// Color palette for Dashboard shortcut tiles.
 //
-// Per-device preference (localStorage), same convention as Finance's
-// budget/hideBalances — these are UI shortcuts, not shared household data.
+// 2026-08-23: the old standalone Quick Launch system (a hardcoded
+// ShelfPulse/RetailSuite default shown to every signed-in account on every
+// device, stored in per-device localStorage) is retired. It's what let a
+// different household's fresh browser show Shenaal's proprietary business
+// links by default — see AGENTS.md's gotchas / MAINTENANCE.md.
+//
+// Dashboard tiles are now just `business_projects` rows with
+// `pinned_dashboard = true`, which is already correctly scoped per
+// household via existing RLS (install_household_rls) — no separate
+// visibility logic needed. This file now only holds the shared color
+// lookup so pinned tiles still get their glossy gradient look, cycled by
+// index (see app/dashboard/page.tsx).
 //
 // Colors are a fixed lookup of full literal Tailwind class strings, not
 // built via template-literal interpolation — see feedback_tailwind_dynamic_classes
@@ -13,19 +20,7 @@
 
 export type QuickLaunchColor = "pink" | "blue" | "purple" | "green" | "orange";
 
-export type QuickLaunchItem = {
-  id: string;
-  label: string;
-  url: string;
-  color: QuickLaunchColor;
-};
-
-export const QUICK_LAUNCH_STORAGE_KEY = "dashboard.quickLaunch.v1";
-
-export const DEFAULT_QUICK_LAUNCH: QuickLaunchItem[] = [
-  { id: "ql1", label: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", color: "pink" },
-  { id: "ql2", label: "RetailSuite", url: "https://retailsuite.onrender.com/", color: "blue" },
-];
+export const QUICK_LAUNCH_COLOR_ORDER: QuickLaunchColor[] = ["pink", "blue", "purple", "green", "orange"];
 
 export const QUICK_LAUNCH_GRADIENT: Record<QuickLaunchColor, string> = {
   pink: "from-pink-500 to-rose-400 shadow-glow-pink",
@@ -35,11 +30,7 @@ export const QUICK_LAUNCH_GRADIENT: Record<QuickLaunchColor, string> = {
   orange: "from-accent-orange to-amber-500 shadow-glow-pink",
 };
 
-/** Small swatch classes for the color picker in Settings — same literal-string convention. */
-export const QUICK_LAUNCH_SWATCH: Record<QuickLaunchColor, string> = {
-  pink: "bg-pink-500",
-  blue: "bg-sky-500",
-  purple: "bg-accent-purple",
-  green: "bg-accent-green",
-  orange: "bg-accent-orange",
-};
+/** Deterministic color for a tile by its position in the pinned list — same tile always gets the same color across renders. */
+export function quickLaunchColorFor(index: number): QuickLaunchColor {
+  return QUICK_LAUNCH_COLOR_ORDER[index % QUICK_LAUNCH_COLOR_ORDER.length];
+}

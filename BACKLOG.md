@@ -15,9 +15,10 @@ User picked 4 items off the session's suggestions doc (`HARI-CRM-SUGGESTIONS-202
 Until all 3 are done, the route safely returns "not configured" and sends nothing — no risk in deploying it early.
 
 ## Phase 0 — Existing polish backlog (pre-dates the strategy session)
-- [x] Quick Launch customization (pick/add/remove shortcuts via Settings, optional Business-project prefill) — `lib/quickLaunch.ts`. Shipped 2026-08-17, commit `cc34cc9`, live.
+- [x] ~~Quick Launch customization (pick/add/remove shortcuts via Settings, optional Business-project prefill)~~ — **RETIRED 2026-08-23.** The Settings-based, per-device localStorage version leaked Shenaal's proprietary business links to any signed-in account (see `PROJECT-STATUS.md` 2026-08-23). Replaced by pinning directly on the Business Projects page (`pinned_dashboard` column, RLS-scoped). `lib/quickLaunch.ts` now only holds the shared tile color palette.
 - [ ] Consolidated "Upcoming" widget (Renewals + Appointments + Payments + Reminders merged into one)
-- [x] Business page: editable project cards (add/edit/remove) — wired to the existing `business_projects` table. Shipped 2026-08-17, commit `46bd5ae`, live.
+- [x] Business page: editable project cards (add/edit/remove), now also with a per-card Pin-to-Dashboard toggle and a 140-char description cap. Shipped 2026-08-17 (commit `46bd5ae`), reworked 2026-08-23 — see `PROJECT-STATUS.md`.
+- [x] **Savings Goals** (Finance) — one active goal per person, private by default with an optional household-shared toggle, gradient progress bar, blurred monthly-allocation reveal, monthly actual-saved logging. New tables `finance_savings_goals`/`finance_savings_goal_logs`, bespoke hook `lib/supabase/useSavingsGoal.ts`. Shipped 2026-08-23 — code delivered, not yet pushed by Coco, see `HANDOFF.md`.
 
 ## Phase 1 — Make it safe/possible for anyone but us to use it
 - [x] **Real signup flow** replacing hand-seeded SQL accounts — `/signup` page (client-side `supabase.auth.signUp()`) + a `handle_new_user_household()` Postgres trigger on `auth.users` insert that atomically creates the `households` + `profiles` rows. Shipped 2026-08-16.

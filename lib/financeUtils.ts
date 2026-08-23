@@ -236,3 +236,44 @@ export function convertAmount(amount: number, from: string, to: string, rates: F
 export function convertTotalsToCurrency(totals: Record<string, number>, target: string, rates: FxRateMap): number {
   return Object.entries(totals).reduce((sum, [cur, amt]) => sum + convertAmount(amt, cur, target, rates), 0);
 }
+
+/**
+ * Savings Goals math (2026-08-23). Whole months remaining between today and
+ * a target ISO date, floored at 0 (a target date in the past or this month
+ * returns 0, which computeSavingsPlan below treats as "due now" via its own
+ * max(...,1) floor rather than dividing by zero).
+ */
+export function monthsUntilDate(targetDateIso: string): number {
+  if (!targetDateIso) return 0;
+  const target = new Date(targetDateIso);
+  const now = new Date();
+  let months = (target.getFullYear() - now.getFullYear()) * 12 + (target.getMonth() - now.getMonth());
+  if (target.getDate() < now.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+export type SavingsPlan = {
+  monthsRemaining: number;
+  remainingToSave: number;
+  monthlyAllocationNeeded: number;
+  progressPct: number;
+};
+
+/**
+ * How much to set aside this month to hit a savings goal on time, recalculated
+ * fresh off actual progress every time (no separate catch-up logic needed —
+ * falling behind one month naturally raises next month's number since
+ * remainingToSave grows relative to monthsRemaining shrinking).
+ */
+export function computeSavingsPlan(targetAmount: number, savedSoFar: number, targetDateIso: string): SavingsPlan {
+  const monthsRemaining = monthsUntilDate(targetDateIso);
+  const remainingToSave = Math.max(0, targetAmount - savedSoFar);
+  const monthlyAllocationNeeded = remainingToSave / Math.max(monthsRemaining, 1);
+  const progressPct = targetAmount > 0 ? Math.min(100, (savedSoFar / targetAmount) * 100) : 0;
+  return { monthsRemaining, remainingToSave, monthlyAllocationNeeded, progressPct };
+}
+
+/** ISO date for the 1st of a given month — the canonical key for one savings-goal-log row per month. */
+export function firstOfMonthIso(date: Date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
+}

@@ -21,10 +21,12 @@ import {
   estimateFromRange,
   convertAmount,
   spendingPlanStatus,
+  computeSavingsPlan,
 } from "@/lib/financeUtils";
 import { useFxRates } from "@/lib/supabase/useFxRates";
-import { CashFlowChart, SpendCategoryDonut, BudgetMeterCard, CurrencyBalancesBars, SpendingPlanBanner } from "@/components/finance/FinanceDeepView";
-import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle, BarChart3, List, Wallet } from "lucide-react";
+import { useSavingsGoal, type GoalVisibility } from "@/lib/supabase/useSavingsGoal";
+import { CashFlowChart, SpendCategoryDonut, BudgetMeterCard, CurrencyBalancesBars, SpendingPlanBanner, SavingsGoalProgressBar } from "@/components/finance/FinanceDeepView";
+import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle, BarChart3, List, Wallet, Target, Trash2 } from "lucide-react";
 
 type Currency = "AED" | "LKR" | "USD";
 type AccountKind = "credit" | "debit" | "current" | "checking" | "savings" | "bnpl";
@@ -225,6 +227,57 @@ export default function FinancePage() {
   });
   const { rates: fxRates } = useFxRates();
   const PRIMARY_CURRENCY: Currency = "AED";
+
+  // Savings Goals (2026-08-23) — bespoke hook, not useSupabaseSynced; see
+  // lib/supabase/useSavingsGoal.ts for why. One active goal per person.
+  const savingsGoal = useSavingsGoal();
+  const mySavedSoFar = savingsGoal.myGoal ? savingsGoal.totalSavedFor(savingsGoal.myGoal.id) : 0;
+  const mySavingsPlan = savingsGoal.myGoal
+    ? computeSavingsPlan(savingsGoal.myGoal.targetAmount, mySavedSoFar, savingsGoal.myGoal.targetDate)
+    : null;
+  const myCurrentMonthLog = savingsGoal.myLogs.find((l) => l.month === savingsGoal.currentMonth) ?? null;
+  const [savedThisMonthInput, setSavedThisMonthInput] = useState("");
+  const [newGoal, setNewGoal] = useState({ label: "", targetAmount: "", currency: "AED" as Currency, targetDate: "", visibility: "private" as GoalVisibility });
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState({ label: "", targetAmount: "", currency: "AED" as Currency, targetDate: "", visibility: "private" as GoalVisibility });
+  const startEditGoal = () => {
+    if (!savingsGoal.myGoal) return;
+    setGoalDraft({
+      label: savingsGoal.myGoal.label,
+      targetAmount: String(savingsGoal.myGoal.targetAmount),
+      currency: savingsGoal.myGoal.currency as Currency,
+      targetDate: savingsGoal.myGoal.targetDate,
+      visibility: savingsGoal.myGoal.visibility,
+    });
+    setEditingGoal(true);
+  };
+  const saveGoalEdit = async () => {
+    if (!savingsGoal.myGoal || !goalDraft.label.trim() || !goalDraft.targetAmount) return;
+    await savingsGoal.updateGoal(savingsGoal.myGoal.id, {
+      label: goalDraft.label.trim(),
+      targetAmount: Number(goalDraft.targetAmount),
+      currency: goalDraft.currency,
+      targetDate: goalDraft.targetDate,
+      visibility: goalDraft.visibility,
+    });
+    setEditingGoal(false);
+  };
+  const createSavingsGoal = async () => {
+    if (!newGoal.label.trim() || !newGoal.targetAmount || !newGoal.targetDate) return;
+    await savingsGoal.createGoal({
+      label: newGoal.label.trim(),
+      targetAmount: Number(newGoal.targetAmount),
+      currency: newGoal.currency,
+      targetDate: newGoal.targetDate,
+      visibility: newGoal.visibility,
+    });
+    setNewGoal({ label: "", targetAmount: "", currency: "AED", targetDate: "", visibility: "private" });
+  };
+  const saveThisMonth = async () => {
+    if (!savingsGoal.myGoal || savedThisMonthInput === "") return;
+    await savingsGoal.logMonth(savingsGoal.myGoal.id, Number(savedThisMonthInput), savingsGoal.myGoal.visibility);
+    setSavedThisMonthInput("");
+  };
   const [budget, setBudget] = useLocalStorage<number>("finance.monthlyBudget", 0);
   const [hideBalances, setHideBalances] = useLocalStorage<boolean>("finance.hideBalances", true);
   const [viewMode, setViewMode] = useLocalStorage<"standard" | "deep">("finance.viewMode", "standard");
@@ -604,6 +657,19 @@ export default function FinancePage() {
           hasIncome={fIncome.some((i) => i.isRecurring)}
         />
 
+        {/* Savings goal — monthly allocation needed, blurred until clicked like every other balance on this page */}
+        {savingsGoal.myGoal && mySavingsPlan && (
+          <section className="glass-card rounded-xl2 p-4">
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="flex items-center gap-2 text-gray-300">
+                <Target size={14} className="text-accent-green" />
+                Towards &ldquo;{savingsGoal.myGoal.label}&rdquo;, set aside this month:
+              </p>
+              <BlurAmount id="savings-allocation" text={`${Math.round(mySavingsPlan.monthlyAllocationNeeded).toLocaleString()} ${savingsGoal.myGoal.currency}`} />
+            </div>
+          </section>
+        )}
+
         {/* Deep view — charts/meters built from the same data as Standard view below */}
         {viewMode === "deep" && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -615,6 +681,28 @@ export default function FinancePage() {
             <div className="lg:col-span-2">
               <CurrencyBalancesBars totals={totalsByCurrency} hideBalances={hideBalances} />
             </div>
+            {savingsGoal.myGoal && mySavingsPlan && (
+              <SavingsGoalProgressBar
+                label={savingsGoal.myGoal.label}
+                targetAmount={savingsGoal.myGoal.targetAmount}
+                currency={savingsGoal.myGoal.currency}
+                savedSoFar={mySavedSoFar}
+                progressPct={mySavingsPlan.progressPct}
+                targetDate={savingsGoal.myGoal.targetDate}
+              />
+            )}
+            {savingsGoal.householdGoals.filter((g) => g.visibility === "shared_view").map((g) => (
+              <SavingsGoalProgressBar
+                key={g.id}
+                label={g.label}
+                targetAmount={g.targetAmount}
+                currency={g.currency}
+                savedSoFar={savingsGoal.totalSavedFor(g.id)}
+                progressPct={computeSavingsPlan(g.targetAmount, savingsGoal.totalSavedFor(g.id), g.targetDate).progressPct}
+                targetDate={g.targetDate}
+                ownerName={savingsGoal.memberNames[g.ownerId]}
+              />
+            ))}
           </div>
         )}
 
@@ -1242,6 +1330,141 @@ export default function FinancePage() {
               <Plus size={14} /> Add income
             </button>
           </div>
+        </section>
+
+        {/* Savings Goal (2026-08-23) — one active goal per person, private by default, optional household-shared. See lib/supabase/useSavingsGoal.ts. */}
+        <section className="glass-card rounded-xl2 p-5">
+          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
+            <Target size={16} className="text-accent-green" /> Savings goal
+          </h2>
+          <p className="relative z-10 mb-3 text-xs text-gray-500">
+            Save X amount by X date, tracked against your actual monthly progress. One active goal at a time — mark it
+            complete (or delete it) to start a new one.
+          </p>
+
+          {!savingsGoal.myGoal ? (
+            <div className="relative z-10 flex flex-wrap items-end gap-2">
+              <Field label="Goal"><input value={newGoal.label} onChange={(e) => setNewGoal((s) => ({ ...s, label: e.target.value }))} placeholder="e.g. Emergency fund" className={inputCls} /></Field>
+              <Field label="Target amount"><input type="number" value={newGoal.targetAmount} onChange={(e) => setNewGoal((s) => ({ ...s, targetAmount: e.target.value }))} className={smallInputCls} /></Field>
+              <Field label="Currency">
+                <select value={newGoal.currency} onChange={(e) => setNewGoal((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                  <option>AED</option><option>LKR</option><option>USD</option>
+                </select>
+              </Field>
+              <Field label="By date"><input type="date" value={newGoal.targetDate} onChange={(e) => setNewGoal((s) => ({ ...s, targetDate: e.target.value }))} className={selectCls} /></Field>
+              <Field label="Visibility">
+                <select value={newGoal.visibility} onChange={(e) => setNewGoal((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
+                  <option value="private">Private (only me)</option>
+                  <option value="shared_view">Shared with household</option>
+                </select>
+              </Field>
+              <button type="button" onClick={createSavingsGoal} className="flex items-center gap-1 rounded-xl bg-accent-green px-3 py-2 text-sm text-white">
+                <Plus size={14} /> Set goal
+              </button>
+            </div>
+          ) : editingGoal ? (
+            <div className="relative z-10 flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
+              <Field label="Goal"><input value={goalDraft.label} onChange={(e) => setGoalDraft((s) => ({ ...s, label: e.target.value }))} className={inputCls} /></Field>
+              <Field label="Target amount"><input type="number" value={goalDraft.targetAmount} onChange={(e) => setGoalDraft((s) => ({ ...s, targetAmount: e.target.value }))} className={smallInputCls} /></Field>
+              <Field label="Currency">
+                <select value={goalDraft.currency} onChange={(e) => setGoalDraft((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
+                  <option>AED</option><option>LKR</option><option>USD</option>
+                </select>
+              </Field>
+              <Field label="By date"><input type="date" value={goalDraft.targetDate} onChange={(e) => setGoalDraft((s) => ({ ...s, targetDate: e.target.value }))} className={selectCls} /></Field>
+              <Field label="Visibility">
+                <select value={goalDraft.visibility} onChange={(e) => setGoalDraft((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
+                  <option value="private">Private (only me)</option>
+                  <option value="shared_view">Shared with household</option>
+                </select>
+              </Field>
+              <button type="button" onClick={saveGoalEdit} className="text-accent-green hover:text-white"><Check size={16} /></button>
+              <button type="button" onClick={() => setEditingGoal(false)} className={iconBtnCls}><X size={16} /></button>
+            </div>
+          ) : (
+            <div className="relative z-10 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-sm text-gray-200">
+                    {savingsGoal.myGoal.label}
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${savingsGoal.myGoal.visibility === "shared_view" ? "bg-accent-blue/20 text-accent-blue" : "bg-white/10 text-gray-400"}`}>
+                      {savingsGoal.myGoal.visibility === "shared_view" ? "shared with household" : "private"}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Target <BlurAmount id="goal-target" text={formatMoney(savingsGoal.myGoal.targetAmount, savingsGoal.myGoal.currency)} /> by {savingsGoal.myGoal.targetDate}
+                    {mySavingsPlan ? ` · ${mySavingsPlan.monthsRemaining} mo left` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={startEditGoal} className={iconBtnCls} title="Edit goal"><Pencil size={13} /></button>
+                  <button
+                    type="button"
+                    onClick={() => savingsGoal.myGoal && savingsGoal.deleteGoal(savingsGoal.myGoal.id)}
+                    className={iconBtnCls}
+                    title="Mark complete / delete (frees you up to set a new goal)"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 flex items-center justify-between text-xs text-gray-400">
+                  <span><BlurAmount id="goal-saved" text={Math.round(mySavedSoFar).toLocaleString()} /> saved</span>
+                  <span>{mySavingsPlan ? Math.round(mySavingsPlan.progressPct) : 0}%</span>
+                </p>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-base-card">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-accent-purple via-accent-blue to-accent-green transition-[width] duration-500"
+                    style={{ width: `${mySavingsPlan ? Math.max(mySavingsPlan.progressPct, mySavingsPlan.progressPct > 0 ? 2 : 0) : 0}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-end gap-2 border-t border-base-border pt-3">
+                <Field label={`Actually saved this month (${savingsGoal.currentMonth.slice(0, 7)})`}>
+                  <input
+                    type="number"
+                    value={savedThisMonthInput}
+                    onChange={(e) => setSavedThisMonthInput(e.target.value)}
+                    placeholder={myCurrentMonthLog ? String(myCurrentMonthLog.amountSaved) : "0"}
+                    className={smallInputCls}
+                  />
+                </Field>
+                <button type="button" onClick={saveThisMonth} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
+                  <Check size={14} /> {myCurrentMonthLog ? "Update" : "Log"} this month
+                </button>
+              </div>
+
+              {savingsGoal.myLogs.length > 0 && (
+                <div className="border-t border-base-border pt-3">
+                  <p className="mb-2 text-xs text-gray-500">Past months logged</p>
+                  <div className="flex flex-wrap gap-2">
+                    {savingsGoal.myLogs.slice(0, 6).map((l) => (
+                      <span key={l.id} className="rounded-full bg-base-card/60 px-2.5 py-1 text-xs text-gray-300">
+                        {l.month.slice(0, 7)}: {formatMoney(l.amountSaved, savingsGoal.myGoal!.currency)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {savingsGoal.householdGoals.length > 0 && (
+            <div className="relative z-10 mt-4 space-y-2 border-t border-base-border pt-4">
+              <p className="text-xs text-gray-500">Household shared goals</p>
+              {savingsGoal.householdGoals.map((g) => (
+                <div key={g.id} className="flex items-center justify-between text-sm text-gray-300">
+                  <span>{g.label} — {savingsGoal.memberNames[g.ownerId] ?? "Household member"}</span>
+                  <span className="text-xs text-gray-500">
+                    {Math.round(savingsGoal.totalSavedFor(g.id)).toLocaleString()} / {Math.round(g.targetAmount).toLocaleString()} {g.currency}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Unified Add Expense (Item 2 + Item 3) — monthly recurring / fixed-term / one-off, all in one place, with min-max estimate entry */}

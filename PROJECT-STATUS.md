@@ -1,7 +1,69 @@
 # PROJECT-STATUS.md — Hari-CRM
 
-Last updated: 2026-08-22. Follows the dated-append convention in CLAUDE.md —
+Last updated: 2026-08-23. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
+
+## 2026-08-23 — Business Projects/Dashboard data-leak fix + Savings Goals shipped (code delivered, not yet pushed by Coco)
+
+**Trigger:** Coco reported a friend logging in via his own Google account saw Shenaal's
+proprietary ShelfPulse/RetailSuite tiles on the Dashboard, and separately that his own 4
+business projects had disappeared from the Business section.
+
+**Root cause (confirmed via live DB queries, not assumed):** `business_projects` was
+genuinely empty (0 rows) for every household — `DEFAULT_PROJECTS` in `app/business/page.tsx`
+was only ever a client-side placeholder passed to `useSupabaseSynced`'s initial value, never
+durably saved. Separately, `lib/quickLaunch.ts`'s `DEFAULT_QUICK_LAUNCH` was a hardcoded
+array rendered from per-device localStorage on the Dashboard for literally any signed-in
+account — not household-scoped at all. Nothing was deleted; the leak and the "disappearance"
+were two sides of the same design flaw (a client-only default masquerading as real data).
+
+**Fix, per Coco's own answers to clarifying questions:** `business_projects` becomes the
+single source of truth for both pages via a new `pinned_dashboard boolean` column (migration
+applied live, RLS confirmed household-scoped via `pg_policies`/`install_household_rls`, not
+assumed from the — confirmed stale — `schema.sql`). Business Projects page: full CRUD, pin
+toggle per card, 140-char description cap, dashed-border empty "+" state for new households.
+Dashboard: reads pinned rows directly, name-only tiles (description never shown), empty "+"
+state. Settings' old Quick Launch section removed entirely.
+
+**Also discovered and fixed this session:** Coco separately reported that signing in with
+`hilarynonis@gmail.com`'s Google identity landed on a brand-new empty profile instead of his
+real household — added a "Link a Google account" button in Settings using Supabase's native
+`linkIdentity()`, so he can attach it to his real Shenaal account going forward. Two
+now-orphaned, confirmed-zero-data accounts from that split (`hilarynonis@gmail.com`'s old
+login, `shalininonisdxb@gmail.com`) still need Coco to delete them via Supabase Dashboard —
+the equivalent SQL was blocked by a platform safety classifier on deleting `auth.*` rows
+directly; their `profiles` rows cascade-delete via FK once he does, and the leftover
+`households` rows are a normal follow-up `execute_sql` cleanup for next session.
+
+**New feature — Savings Goals**, per Coco's spec: one active goal per person, private by
+default with an explicit "shared with household" opt-in. New tables
+`finance_savings_goals`/`finance_savings_goal_logs` (migrations applied live). Deliberately
+NOT built on the shared `useSupabaseSynced`/`ownerMap.resolveOwner()` pattern — that
+resolver can only ever emit `shared_view`/`mirrored_edit` visibility, never true `private` —
+so a bespoke hook (`lib/supabase/useSavingsGoal.ts`) talks to Supabase directly instead, with
+visibility set explicitly. RLS double-checked live before building
+(`is_admin() OR owner_id = auth.uid() OR (shared_view/mirrored_edit AND same household)` for
+SELECT; owner-or-admin only for write) — confirms 'private' really is owner-only. Finance
+page gets: a gradient progress bar in Deep view, a blurred "allocate this much this month"
+reveal under the Spending Plan banner, and a full Standard-view section (set/edit goal, log
+each month's actual saved amount, see past months).
+
+**Verification done this session:** grepped the full repo for every remaining reference to
+the removed Quick Launch system and to the changed `business_projects`/`Project` shape (only
+expected call sites remained); built the ENTIRE real repo (not just the touched files) from
+a fresh tarball snapshot of Coco's actual working tree, overlaid the 9 changed/new files onto
+it, ran `tsc --noEmit` (clean) and `npm run build` (succeeded, all 28 routes compiled,
+including `/business`, `/dashboard`, `/finance`, `/settings`). **Not done:** clicking through
+the actual UI in a browser — nothing is live yet since Coco hasn't pushed.
+
+**Delivery status:** all 9 files (`lib/quickLaunch.ts`, `lib/financeUtils.ts`,
+`lib/supabase/useSavingsGoal.ts` [new], `components/finance/FinanceDeepView.tsx`,
+`components/Sidebar.tsx`, `app/business/page.tsx`, `app/dashboard/page.tsx`,
+`app/settings/page.tsx`, `app/finance/page.tsx`) written directly to Coco's real working tree
+via the device bridge, with mtime guards confirming no in-between edits were clobbered.
+**Nothing has been committed or pushed** — Claude Cowork's cloud sandbox cannot push directly
+(see `AGENTS.md`); this is Coco's or Antigravity's next step. See `HANDOFF.md` for the current
+baton.
 
 ## 2026-08-14 (later) — Live preview deployed, login temporarily disabled
 

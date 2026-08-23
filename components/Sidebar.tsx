@@ -70,7 +70,7 @@ export default function Sidebar() {
         <div className="glass-card rounded-xl2 p-4">
           <p className="relative z-10 text-sm font-medium text-gray-100">Status check</p>
           <p className="relative z-10 mt-1 text-xs text-gray-400">
-            ShelfPulse & RetailSuite health is one card away — see Business Projects.
+            Your pinned shortcuts&rsquo; health is one card away — see Business Projects.
           </p>
         </div>
 

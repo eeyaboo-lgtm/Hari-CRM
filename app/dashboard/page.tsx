@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
@@ -15,8 +15,8 @@ import {
   useSpendingTrend,
   useSpendingCategorySplit,
 } from "@/components/DashboardLiveWidgets";
-import { useLocalStorage } from "@/lib/useLocalStorage";
-import { QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH, QUICK_LAUNCH_GRADIENT, type QuickLaunchItem } from "@/lib/quickLaunch";
+import { createClient } from "@/lib/supabase/client";
+import { QUICK_LAUNCH_GRADIENT, quickLaunchColorFor } from "@/lib/quickLaunch";
 import {
   HeartPulse,
   Activity,
@@ -25,6 +25,7 @@ import {
   Sparkles,
   Award,
   ChevronRight,
+  Plus,
 } from "lucide-react";
 
 // Finance widgets below are live (components/DashboardLiveWidgets.tsx, reads
@@ -33,11 +34,38 @@ import {
 // useSpendingCategorySplit in DashboardLiveWidgets.tsx for what they
 // compute and why they're framed as a projection, not history.
 
+type PinnedProject = { id: string; name: string; url: string };
+
+// 2026-08-23: the old standalone Quick Launch localStorage system is
+// retired (see lib/quickLaunch.ts's header comment for why). Dashboard
+// shortcut tiles are now just business_projects rows with
+// pinned_dashboard=true — already correctly scoped per household via
+// existing RLS, so a fresh browser/account only ever sees its own
+// household's pinned tiles, never someone else's business links.
+function usePinnedProjects() {
+  const [items, setItems] = useState<PinnedProject[]>([]);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("business_projects")
+        .select("id, name, url")
+        .eq("pinned_dashboard", true)
+        .order("name");
+      if (!cancelled && !error && data) setItems(data as PinnedProject[]);
+      if (!cancelled) setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return { items, ready };
+}
+
 export default function DashboardPage() {
-  // Quick Launch is user-customizable from Settings (Phase 0 backlog) — see
-  // lib/quickLaunch.ts for the shared type/storage key/color lookup (used
-  // by both this page and Settings, so they never drift).
-  const [quickLaunch] = useLocalStorage<QuickLaunchItem[]>(QUICK_LAUNCH_STORAGE_KEY, DEFAULT_QUICK_LAUNCH);
+  const { items: pinnedProjects } = usePinnedProjects();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const trendData = useSpendingTrend(6);
   const categoryData = useSpendingCategorySplit();
@@ -77,24 +105,36 @@ export default function DashboardPage() {
               <UpcomingPaymentsCard />
 
               <div className="space-y-4">
-                {quickLaunch.length === 0 && (
-                  <Link href="/settings" className="glass-card block rounded-xl2 p-5 text-center text-xs text-gray-500 hover:text-white">
-                    No quick launch shortcuts yet — add some in Settings.
+                {pinnedProjects.length === 0 && (
+                  <Link
+                    href="/business"
+                    className="glass-card flex flex-col items-center justify-center gap-2 rounded-xl2 border border-dashed border-accent-purple/40 p-6 text-center text-gray-500 hover:border-accent-purple hover:text-white"
+                  >
+                    <Plus size={18} />
+                    <span className="text-xs">No shortcuts pinned yet — add one in Business Projects</span>
                   </Link>
                 )}
-                {quickLaunch.map((app) => (
+                {pinnedProjects.map((p, i) => (
                   <a
-                    key={app.id}
-                    href={app.url}
+                    key={p.id}
+                    href={p.url || "#"}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`glossy-gradient block rounded-xl2 bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${QUICK_LAUNCH_GRADIENT[app.color]}`}
+                    className={`glossy-gradient block rounded-xl2 bg-gradient-to-br p-5 transition-transform hover:scale-[1.02] ${QUICK_LAUNCH_GRADIENT[quickLaunchColorFor(i)]}`}
                   >
                     <p className="relative z-10 text-xs uppercase tracking-wide text-white/80">Quick launch</p>
-                    <p className="relative z-10 mt-2 text-lg font-semibold text-white">{app.label}</p>
-                    <p className="relative z-10 text-xs text-white/80">{app.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</p>
+                    <p className="relative z-10 mt-2 text-lg font-semibold text-white">{p.name}</p>
+                    {p.url && <p className="relative z-10 text-xs text-white/80">{p.url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</p>}
                   </a>
                 ))}
+                {pinnedProjects.length > 0 && (
+                  <Link
+                    href="/business"
+                    className="glass-card flex items-center justify-center gap-1.5 rounded-xl2 border border-dashed border-base-border p-3 text-xs text-gray-500 hover:border-accent-purple hover:text-white"
+                  >
+                    <Plus size={13} /> Manage shortcuts in Business Projects
+                  </Link>
+                )}
               </div>
             </div>
 

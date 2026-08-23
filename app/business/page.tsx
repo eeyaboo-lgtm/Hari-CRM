@@ -4,20 +4,19 @@ import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { useSupabaseSynced } from "@/lib/supabase/useSupabaseSynced";
-import { Check, ExternalLink, Eye, EyeOff, Pencil, Plus, X } from "lucide-react";
+import { Check, ExternalLink, Eye, EyeOff, Pencil, Pin, PinOff, Plus, X } from "lucide-react";
 
-type Project = { id: string; name: string; url: string; projectType: string; notes: string };
+type Project = { id: string; name: string; url: string; projectType: string; notes: string; pinnedDashboard: boolean };
 
-// Seed data — only used the very first time business_projects is empty
-// (useSupabaseSynced treats this as the initial value before its real
-// fetch completes/replaces it). Once real rows exist in Supabase this
-// array is never consulted again.
-const DEFAULT_PROJECTS: Project[] = [
-  { id: "p1", name: "ShelfPulse", url: "https://shelfpulse-j820.onrender.com/", projectType: "SaaS product", notes: "" },
-  { id: "p2", name: "RetailSuite", url: "https://retailsuite.onrender.com/", projectType: "SaaS product", notes: "" },
-  { id: "p3", name: "UnwindCircle", url: "https://unwindcircle.com/", projectType: "Content site", notes: "" },
-  { id: "p4", name: "Dino History", url: "https://dinohistory.com/", projectType: "Content site", notes: "" },
-];
+// 2026-08-23: no more hardcoded seed data here. business_projects starts
+// genuinely empty for every household — each household adds its own
+// projects/links via the "+" card below. This is also what the Dashboard's
+// shortcut tiles read from (rows with pinnedDashboard=true), so a brand new
+// household sees empty "+" tiles on both pages instead of someone else's
+// business links. See lib/quickLaunch.ts and AGENTS.md for the history of
+// why the old hardcoded default (ShelfPulse/RetailSuite) was a data leak.
+const DEFAULT_PROJECTS: Project[] = [];
+const NOTES_MAX_LEN = 140;
 
 type Idea = { id: string; text: string; status: "new" | "exploring" | "shipped" };
 
@@ -195,13 +194,13 @@ export default function BusinessPage() {
   // useSupabaseSynced + pencil/check pattern as everywhere else in the app.
   const [projects, setProjects] = useSupabaseSynced<Project>("business_projects", "business.projects.v1", DEFAULT_PROJECTS, {
     ownerLocalId: () => "shared",
-    toRow: (p) => ({ name: p.name, project_type: p.projectType || "Project", url: p.url || null, notes: p.notes || null }),
-    fromRow: (row) => ({ id: row.id, name: row.name, url: row.url ?? "", projectType: row.project_type ?? "Project", notes: row.notes ?? "" }),
+    toRow: (p) => ({ name: p.name, project_type: p.projectType || "Project", url: p.url || null, notes: p.notes || null, pinned_dashboard: p.pinnedDashboard }),
+    fromRow: (row) => ({ id: row.id, name: row.name, url: row.url ?? "", projectType: row.project_type ?? "Project", notes: row.notes ?? "", pinnedDashboard: !!row.pinned_dashboard }),
   });
   const [newProject, setNewProject] = useState({ name: "", url: "", projectType: "", notes: "" });
   const addProject = () => {
     if (!newProject.name.trim()) return;
-    setProjects((prev) => [...prev, { id: uid(), name: newProject.name.trim(), url: newProject.url.trim(), projectType: newProject.projectType.trim() || "Project", notes: newProject.notes.trim() }]);
+    setProjects((prev) => [...prev, { id: uid(), name: newProject.name.trim(), url: newProject.url.trim(), projectType: newProject.projectType.trim() || "Project", notes: newProject.notes.trim().slice(0, NOTES_MAX_LEN), pinnedDashboard: false }]);
     setNewProject({ name: "", url: "", projectType: "", notes: "" });
   };
   const removeProject = (id: string) => setProjects((prev) => prev.filter((p) => p.id !== id));
@@ -214,6 +213,7 @@ export default function BusinessPage() {
     setEditingProjectId(null);
     setProjectDraft(null);
   };
+  const togglePinned = (p: Project) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, pinnedDashboard: !x.pinnedDashboard } : x)));
 
   const addIdea = () => {
     if (!text.trim()) return;
@@ -273,15 +273,24 @@ export default function BusinessPage() {
                     placeholder="URL"
                     className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
                   />
-                  <input
+                  <textarea
                     value={projectDraft.notes}
-                    onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value })}
-                    placeholder="Notes (optional)"
-                    className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+                    onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value.slice(0, NOTES_MAX_LEN) })}
+                    placeholder="Short description (optional) — shown here only, never on the Dashboard tile"
+                    maxLength={NOTES_MAX_LEN}
+                    rows={2}
+                    className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
                   />
-                  <div className="flex justify-end gap-2">
-                    <button type="button" onClick={saveProject} className="text-accent-green hover:text-white"><Check size={16} /></button>
-                    <button type="button" onClick={() => setEditingProjectId(null)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+                  <p className="text-right text-[10px] text-gray-500">{projectDraft.notes.length}/{NOTES_MAX_LEN}</p>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                      <input type="checkbox" checked={projectDraft.pinnedDashboard} onChange={(e) => setProjectDraft({ ...projectDraft, pinnedDashboard: e.target.checked })} />
+                      Pin to Dashboard
+                    </label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={saveProject} className="text-accent-green hover:text-white"><Check size={16} /></button>
+                      <button type="button" onClick={() => setEditingProjectId(null)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+                    </div>
                   </div>
                 </div>
               );
@@ -289,11 +298,24 @@ export default function BusinessPage() {
             return (
               <div key={p.id} className="glass-card group relative rounded-xl2 p-5 transition-colors hover:bg-white/[0.06]">
                 <div className="absolute right-3 top-3 z-20 flex gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={() => togglePinned(p)}
+                    className={p.pinnedDashboard ? "text-accent-green hover:text-white" : "text-gray-500 hover:text-white"}
+                    title={p.pinnedDashboard ? "Unpin from Dashboard" : "Pin to Dashboard"}
+                  >
+                    {p.pinnedDashboard ? <Pin size={13} /> : <PinOff size={13} />}
+                  </button>
                   <button type="button" onClick={() => startEditProject(p)} className="text-gray-500 hover:text-white"><Pencil size={13} /></button>
                   <button type="button" onClick={() => removeProject(p.id)} className="text-gray-500 hover:text-red-400"><X size={14} /></button>
                 </div>
+                {p.pinnedDashboard && (
+                  <span className="absolute left-3 top-3 z-20 rounded-full bg-accent-green/20 px-2 py-0.5 text-[9px] uppercase tracking-wide text-accent-green">
+                    On dashboard
+                  </span>
+                )}
                 <a href={p.url || "#"} target="_blank" rel="noopener noreferrer" className="relative z-10 block">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">{p.projectType}</p>
+                  <p className="mt-4 text-xs uppercase tracking-wide text-gray-500">{p.projectType}</p>
                   <h2 className="mt-1 font-medium text-white">{p.name}</h2>
                   <p className="mt-1 truncate text-xs text-accent-blue">{p.url}</p>
                   {p.notes && <p className="mt-1 text-xs italic text-gray-500">{p.notes}</p>}
@@ -301,17 +323,23 @@ export default function BusinessPage() {
               </div>
             );
           })}
-          <div className="glass-card space-y-2 rounded-xl2 p-4">
+          <div className={`glass-card space-y-2 rounded-xl2 border border-dashed p-4 ${projects.length === 0 ? "border-accent-purple/50 md:col-span-2" : "border-base-border"}`}>
+            {projects.length === 0 && (
+              <div className="mb-1 flex items-center gap-2 text-accent-purple">
+                <Plus size={18} />
+                <p className="text-sm font-medium text-white">Add your first project or shortcut</p>
+              </div>
+            )}
             <input
               value={newProject.name}
               onChange={(e) => setNewProject((s) => ({ ...s, name: e.target.value }))}
-              placeholder="New project name"
+              placeholder="Name — this is what shows on the Dashboard tile (e.g. Arun's Gmail)"
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-sm text-gray-100 outline-none focus:border-accent-purple"
             />
             <input
               value={newProject.projectType}
               onChange={(e) => setNewProject((s) => ({ ...s, projectType: e.target.value }))}
-              placeholder="Type (e.g. SaaS product)"
+              placeholder="Type (e.g. SaaS product, Link)"
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
             />
             <input
@@ -319,6 +347,14 @@ export default function BusinessPage() {
               onChange={(e) => setNewProject((s) => ({ ...s, url: e.target.value }))}
               placeholder="URL"
               className="w-full rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
+            />
+            <textarea
+              value={newProject.notes}
+              onChange={(e) => setNewProject((s) => ({ ...s, notes: e.target.value.slice(0, NOTES_MAX_LEN) }))}
+              placeholder="Short description (optional)"
+              maxLength={NOTES_MAX_LEN}
+              rows={2}
+              className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
             />
             <button type="button" onClick={addProject} className="flex w-full items-center justify-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add project

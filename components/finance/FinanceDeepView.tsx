@@ -189,6 +189,55 @@ export function CurrencyBalancesBars({ totals, hideBalances }: { totals: Record<
 }
 
 /**
+ * Horizontal gradient achievement bar for a Savings Goal — Deep view. Pure
+ * props, no data fetching (app/finance/page.tsx computes savedSoFar/
+ * progressPct via lib/financeUtils.ts's computeSavingsPlan and passes them
+ * in), matching every other component in this file.
+ */
+export function SavingsGoalProgressBar({
+  label,
+  targetAmount,
+  currency,
+  savedSoFar,
+  progressPct,
+  targetDate,
+  ownerName,
+}: {
+  label: string;
+  targetAmount: number;
+  currency: string;
+  savedSoFar: number;
+  progressPct: number;
+  targetDate: string;
+  ownerName?: string;
+}) {
+  return (
+    <ChartCard title="Savings goal" subtitle={ownerName ? `${label} — ${ownerName}` : label}>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>{Math.round(savedSoFar).toLocaleString()} {currency} saved</span>
+          <span>{Math.round(targetAmount).toLocaleString()} {currency} goal</span>
+        </div>
+        <div className="h-3 w-full overflow-hidden rounded-full bg-base-card">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-accent-purple via-accent-blue to-accent-green transition-[width] duration-500"
+            style={{ width: `${Math.max(progressPct, progressPct > 0 ? 2 : 0)}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium text-white">{Math.round(progressPct)}% there</span>
+          {targetDate && (
+            <span className="text-gray-500">
+              by {new Date(targetDate).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+            </span>
+          )}
+        </div>
+      </div>
+    </ChartCard>
+  );
+}
+
+/**
  * Simplifi-style "Spending Plan" — recurring monthly income minus committed
  * monthly outflow, converted to one currency via lib/financeUtils.ts's
  * convertAmount(). Red when negative takes priority over the usual

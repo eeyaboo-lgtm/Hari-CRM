@@ -4,8 +4,8 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-22, by Claude Cowork (documentation/handover-setup session, no code
-changed).
+Last touched: 2026-08-23, by Claude Cowork (bug fix + Business Projects/Dashboard rework +
+new Savings Goals feature — code delivered to Coco's machine, NOT yet committed/pushed by him).
 
 ---
 
@@ -52,70 +52,98 @@ with what you shipped, its verification status, and what should happen next.
 
 ## What was just shipped
 
-**Nothing code-wise this session** — this was a documentation-only session that created
-`AGENTS.md` (rewritten from its prior unfilled template), this file, and `MAINTENANCE.md`,
-and backfilled `PROJECT-STATUS.md` for the 3 prior sessions that hadn't been logged there.
+**Code delivered to Coco's machine this session (2026-08-23) — build-verified (`tsc --noEmit`
+clean, `npm run build` succeeds, all 28 routes compile) but NOT YET committed/pushed.** Coco
+needs to review and push via GitHub Desktop for any of this to reach the live site.
 
-**Last real code shipped, for context:** commit `75656e4` ("r33af3a3e222" — an unhelpfully
-generic commit message, not a typo in this doc), pushed 2026-08-20, confirmed via `git log`/
-`git status` this session that the real working tree **is up to date with `origin/main`** —
-the earlier "several commits stuck locally, git push blocked" situation described in
-Claude Cowork's private memory is **resolved**; Coco has since pushed via GitHub Desktop.
-That commit contains: the Quick Add launcher, admin backup restore flow, real (not
-hardcoded) Dashboard spending-trend/category-split widgets, the Email-reminders toggle
-wired to a real backend, global Cmd+K search, the new `/fitness` page (BMI calculator, body
-measurements log, cycle tracker) with 2 new Supabase tables, and the Resend-based alerts
-API route.
+1. **Security fix — proprietary business links were showing on every account.**
+   `lib/quickLaunch.ts`'s hardcoded default (ShelfPulse/RetailSuite) was shown to every
+   signed-in account on any fresh browser via localStorage — a friend logging in on his own
+   Google account saw Shenaal's private business links. Root cause confirmed via live DB
+   query: `business_projects` was actually EMPTY for every household (the old
+   `DEFAULT_PROJECTS` seed array was client-side-only, never durably saved) — this is also
+   why Hilary's own 4 projects (ShelfPulse/RetailSuite/UnwindCircle/DinoHistory) had silently
+   "disappeared": nothing was ever deleted, they just never existed as real rows.
+2. **Architecture change — Dashboard shortcuts now come from Business Projects, not a
+   separate localStorage system.** New `pinned_dashboard boolean` column on
+   `business_projects` (migration applied live). The Business Projects page
+   (`app/business/page.tsx`) is now the single place to add/edit a shortcut (name, URL,
+   optional description capped at 140 chars via `NOTES_MAX_LEN`) and pin/unpin it to the
+   Dashboard via a pin icon per card; the description never shows on the Dashboard tile,
+   only the name. New/empty households see a "beautifully designed" dashed-border "+" empty
+   state on both pages instead of anyone else's data. `app/dashboard/page.tsx` now reads
+   `business_projects` directly (`pinned_dashboard = true`), already correctly scoped per
+   household via existing RLS — confirmed live via `pg_policies`, not assumed. The old
+   Quick Launch section in Settings was removed entirely (`app/settings/page.tsx`) since
+   it's fully superseded.
+3. **New feature — Savings Goals**, per Coco's spec (one active goal per person, private by
+   default with an optional household-shared toggle). New tables `finance_savings_goals` +
+   `finance_savings_goal_logs` (migrations applied live, RLS confirmed correct — 'private'
+   is owner-only even to other household members, 'shared_view' allows household-wide
+   viewing but owner-only editing). Built as a bespoke hook
+   (`lib/supabase/useSavingsGoal.ts`) rather than the shared `useSupabaseSynced`/
+   `resolveOwner` pattern, because `resolveOwner()` can only ever emit `shared_view`/
+   `mirrored_edit`, never true `private` — see the hook's own header comment for the full
+   reasoning. On the Finance page: a horizontal gradient progress bar in Deep view
+   (`SavingsGoalProgressBar` in `components/finance/FinanceDeepView.tsx`), a blurred
+   "allocate this much this month" reveal under the Spending Plan banner (reuses the
+   existing `BlurAmount` pattern), and a full Standard-view section to set the goal, edit
+   it, log each month's actual amount saved, and see past months logged. New math helpers
+   in `lib/financeUtils.ts`: `monthsUntilDate`, `computeSavingsPlan`, `firstOfMonthIso`.
+4. **Auth identity fix (code side only)** — new "Link a Google account" button in Settings
+   (`app/settings/page.tsx`, uses `supabase.auth.linkIdentity()`) so Coco can attach
+   `hilarynonis@gmail.com`'s Google identity onto his real Shenaal account
+   (`hilaryuae@gmail.com`) instead of it creating a separate, empty profile. **Not yet used
+   — he needs to sign in as Shenaal and click it.** If it errors immediately, check Supabase
+   Dashboard → Authentication → Providers → "Allow manual linking" is ON (dashboard-only
+   setting, no MCP tool exposes it).
+5. **Small fix** — `components/Sidebar.tsx`'s "Status check" card had a hardcoded
+   "ShelfPulse & RetailSuite health" reference visible to every household; reworded to be
+   generic.
 
-**Not verified this session:** whether Render's auto-deploy actually picked up `75656e4` and
-the live site reflects it. Nobody has checked `hari-crm.onrender.com` against this commit.
-**First concrete task for whoever picks this up:** load the live site and spot-check the new
-features (fitness page, Cmd+K search, Dashboard widgets) are actually live, not just built.
+**Blocked, needs Coco to act manually (not a coding task):** two confirmed-empty orphan
+accounts (`hilarynonis@gmail.com`'s old separate login, `shalininonisdxb@gmail.com`) need
+deleting via Supabase Dashboard → Authentication → Users — the equivalent SQL was blocked by
+a platform safety classifier on deleting `auth.*` rows directly. Once Coco deletes them there
+(their `profiles` rows cascade-delete automatically via FK), the two now-orphaned
+`households` rows (`1af9b802-...`, `216c70ea-...`) still need cleanup — that part IS doable
+via plain `execute_sql` (app table, not auth schema) by whoever picks this up next.
+
+**Not verified this session:** the actual live UI (build passed, but nothing has been
+manually clicked through in a browser — Coco has not pushed yet, so there's nothing live to
+check against regardless).
 
 ## What's queued next
 
-In priority order (full detail and the complete checklist in `BACKLOG.md`):
+In priority order (full detail in `BACKLOG.md`):
 
-1. **Confirm the live deploy** (see above) — 5-minute check, do this first.
-2. **Resend/email-alerts external setup** — parked, needs Coco to buy a domain first (he
-   asked to be reminded periodically, not asked to build anything more). Once he has one:
-   verify domain in Resend, set 3 Render env vars (`RESEND_API_KEY`, `ALERTS_FROM_EMAIL`,
-   `ALERTS_CRON_SECRET`), wire a free external cron (e.g. cron-job.org) to
-   `/api/alerts/notify?secret=...`. Code is already written and build-verified — this is
-   pure external configuration, not a coding task.
-3. **`schema.sql` is out of date** — confirmed this session it's missing the `households`
-   base table definition and at least `calendar_events`, `finance_expenses`,
-   `finance_payment_schemes` entirely (see `AGENTS.md` §5). Whoever next does schema work
-   should regenerate or manually reconcile `schema.sql` against the live Supabase schema so
-   it stops silently drifting.
-4. **Phase 1 — RLS penetration audit** (method fully documented in `BACKLOG.md`) — still not
-   done. Matters for cross-household-member privacy even though no bank data is stored.
-5. **Phase 2 remaining items** — wearable health sync (no free direct-browser path found,
-   needs a companion app or paid aggregator), configurable Dashboard widgets, calendar
-   recurring-bill full projection (currently shows only the next occurrence), pinnable
-   watchlists, document vault (blocked behind the RLS audit above), moving the ENBD credit
-   card into `finance_cards` (blocked on Coco supplying real limit/outstanding figures).
-6. **Line-ending noise (~56 files)** — harmless CRLF/LF drift, documented in `AGENTS.md` §7/
-   `MAINTENANCE.md`. Not urgent, but a `.gitattributes` fix would make `git status` legible
-   again.
+1. **Coco reviews and pushes the delivered files** via GitHub Desktop — nothing above is live
+   until then. First live check afterward: Dashboard tiles, Business Projects pin toggle,
+   Finance's new Savings Goal section, all under his own account and (if he can arrange it)
+   a second test account in a different household.
+2. **Two orphan-account manual deletions** (see above) — needs Coco, then a same-session or
+   next-session Claude Cowork/Antigravity cleans up the leftover `households` rows.
+3. **Link the Google account** — Coco signs in as Shenaal, clicks the new button in Settings.
+4. **Resend/email-alerts external setup** — still parked, needs Coco to buy a domain first.
+5. **`schema.sql` is still out of date** — now also missing `finance_savings_goals`,
+   `finance_savings_goal_logs`, and the `pinned_dashboard` column on `business_projects` on
+   top of the gaps already noted in `AGENTS.md` §5.
+6. **Phase 1 — RLS penetration audit** — still not done.
+7. **Line-ending noise (~56 files)** — unchanged, still not urgent.
 
 ## Assigned specifically to Antigravity (not to be done by Claude Cowork)
 
-None outstanding right now. When Coco hands a task explicitly meant for Antigravity, record
-it here in full — enough context that Antigravity doesn't need him to repeat it — even if
-Claude Cowork could technically do it itself.
+None outstanding right now.
 
 ## Standing notes
 
-- Claude Cowork's cloud sandbox still cannot push to this repo directly (git proxy blocks it
-  outright, confirmed across multiple sessions/tokens) — its workaround is delivering files
-  to Coco's machine for him to commit via GitHub Desktop. This is a structural limitation of
-  its sandbox, not a bug to fix.
-- Antigravity, by contrast, has persistent local git auth on Coco's machine and should be
-  able to commit and push directly — first Antigravity session here should confirm this
-  actually works and note the result here.
-- No `.env.local` exists in the real working tree right now — needed for local `npm run dev`
-  and not needed for anything this session. See `AGENTS.md` §8 for how to source real values.
-- The stale outer duplicate folder (`AGENTS.md` §3) still exists on disk — not cleaned up
-  this session since deleting files wasn't in scope for a docs-only task. Safe to leave
-  alone; just never write to it.
+- Claude Cowork's cloud sandbox still cannot push to this repo directly — its workaround is
+  delivering files to Coco's machine for him to commit via GitHub Desktop. Confirmed again
+  this session (all 9 changed/new files delivered via SendUserFile + written to disk via the
+  device bridge, none committed).
+- Antigravity has persistent local git auth on Coco's machine and should be able to commit
+  and push directly — still not independently confirmed by an actual Antigravity session.
+- No `.env.local` exists in the real working tree — this session's build verification used a
+  full tarball snapshot of the real repo in an isolated scratch copy (not the real working
+  tree) purely to confirm `tsc`/`npm run build` pass; no `.env.local` was needed for that.
+- The stale outer duplicate folder (`AGENTS.md` §3) still exists on disk — left alone.
