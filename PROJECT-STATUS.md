@@ -1,7 +1,44 @@
 # PROJECT-STATUS.md — Hari-CRM
 
-Last updated: 2026-08-23. Follows the dated-append convention in CLAUDE.md —
+Last updated: 2026-08-25. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
+
+## 2026-08-25 (session #27) — Mobile hamburger navigation added (code delivered, not yet pushed by Coco)
+
+**Trigger:** Coco reported "the mobile web version is lacking menu navigation."
+
+**Root cause (confirmed by reading the code, not guessed):** `components/Sidebar.tsx` is
+`hidden md:flex` — the app's only section nav is invisible below the `md` (768px) breakpoint.
+`components/MobileBackButton.tsx`, added in an earlier session specifically because phones had
+no way to navigate, only replays browser history one step back and is itself hidden on `/`,
+`/dashboard`, `/login`. `GlobalSearch` (Cmd+K) has no visible trigger a touch user would
+discover. A phone user landing on Dashboard had no way to reach any other section without
+typing a URL directly.
+
+**Fix:** new `lib/navItems.ts` — the section list (label/icon/href) that used to live inline in
+`Sidebar.tsx`, extracted into a shared module both Sidebar and the new mobile nav read from, so
+they can't drift apart as pages are added (`Sidebar.tsx` updated to import from it, no
+behavior change). New `components/MobileNav.tsx` — hamburger button opening a full-screen
+slide-out drawer with the same 9 sections + Log out, styled to match Sidebar's active-state
+gradient. Mounted in `app/layout.tsx` inside `<ProfileGate>` next to `<GlobalSearch />`, so it
+only appears once a household/profile is unlocked.
+
+**Placement note:** deliberately NOT top-right (the conventional hamburger spot) — checked
+every existing fixed-position element first and every other corner was already claimed:
+`MobileBackButton` owns top-left; Dashboard's `TopBar` (used only on `/dashboard`, no other
+page renders it) has a bell + avatar-switcher cluster that is not hidden on mobile and reaches
+top-right; `GlobalSearch`'s own floating trigger and `SaveStatusIndicator` both already sit
+bottom-right. Landed on `fixed bottom-4 left-3`, the one open corner, with the drawer sliding
+in from the left to match.
+
+**Verification:** every file checked with a Babel parser (JSX+TypeScript plugins) for syntax
+validity only — no `tsc`/`next build` this session (no node_modules/full repo available), and
+no live phone or browser check (nothing is deployed/pushed to test against). First thing to
+verify once Coco pushes: open on an actual phone, confirm the hamburger appears, the drawer
+opens/closes cleanly, and nothing overlaps Dashboard's bell/avatar row. Delivered via
+`SendUserFile` + committed straight to the real (inner) repo folder via the device bridge;
+nothing pushed to GitHub (still blocked from the cloud sandbox). Full detail in memory:
+`project_hari_mobile_nav.md`.
 
 ## 2026-08-23 (later, session #26) — Data-loss root-cause fix + DatePicker + app-wide add-row label audit + new standing rule (code delivered, not yet pushed by Coco)
 

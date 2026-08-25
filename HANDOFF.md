@@ -4,11 +4,43 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-23, by Claude Cowork (data-loss root-cause fix + themed DatePicker +
-app-wide add-row label audit + new standing Form/Data-Entry rule in CLAUDE.md/AGENTS.md — code
-delivered to Coco's machine, NOT yet committed/pushed by him). This is a SEPARATE, LATER
-session than the "bug fix + Business Projects/Dashboard rework + Savings Goals" work described
-below — that work is still queued for Coco to push; nothing in it was touched this session.
+Last touched: 2026-08-25, by Claude Cowork (mobile menu navigation added — phones had zero way
+to switch sections — code delivered to Coco's machine, NOT yet committed/pushed by him). This
+is a SEPARATE, LATER session than the 2026-08-23 work described below; none of that was
+touched this session, and it's all still queued for Coco to push, now three sessions deep.
+
+## What was just shipped (this session, 2026-08-25)
+
+**Trigger:** Coco reported "the mobile web version is lacking menu navigation." Confirmed by
+reading the code: `components/Sidebar.tsx` is `hidden md:flex` — invisible below the `md`
+breakpoint — and `components/MobileBackButton.tsx` only replays browser history one step back
+(and is itself hidden on Dashboard/login/root). `GlobalSearch` (Cmd+K) has no visible touch
+trigger. Net effect: a phone user had no way off whatever page they landed on.
+
+**Fix (3 files changed, 1 new, verified only with a Babel parser for syntax — no `tsc`/`next
+build` this session, no node_modules available):**
+- `lib/navItems.ts` (new) — the section list (label/icon/href) that used to live inline in
+  `Sidebar.tsx`, pulled out so desktop Sidebar and the new mobile drawer read from one shared
+  source and can't drift apart as pages are added.
+- `components/Sidebar.tsx` — now imports from `lib/navItems.ts` instead of defining the list
+  inline. No visual/behavior change on desktop.
+- `components/MobileNav.tsx` (new) — hamburger button + full-screen slide-out drawer, same 9
+  sections + Log out, styled to match Sidebar. Positioned `fixed bottom-4 left-3` (NOT the more
+  conventional top-right) because every other corner was already taken: MobileBackButton owns
+  top-left; Dashboard's `TopBar` (only used on `/dashboard`) has a bell + avatar cluster that
+  reaches top-right on mobile; GlobalSearch's own trigger and SaveStatusIndicator both already
+  live bottom-right.
+- `app/layout.tsx` — mounted `<MobileNav />` inside `<ProfileGate>`, next to `<GlobalSearch />`,
+  so it only shows once a household/profile is unlocked.
+
+**Not verified:** no live phone/browser check this session (no deployed build to test against
+— nothing is pushed yet). First thing to check once Coco pushes: open on an actual phone,
+confirm the hamburger appears bottom-left, the drawer opens/closes cleanly, and nothing
+overlaps Dashboard's bell/avatar row. Full detail: `project_hari_mobile_nav.md` in memory.
+
+---
+
+## Previously shipped (2026-08-23 sessions) — STILL queued for Coco to push, unchanged this session
 
 ---
 
@@ -153,11 +185,13 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
-0. **Coco pushes BOTH sessions' delivered files** — this session's (data-loss fix, DatePicker,
-   label audit, CLAUDE.md/AGENTS.md rule) AND the earlier session's (items 1-5 below) are both
-   sitting on disk uncommitted. First live check after pushing: reproduce the original bug
-   (add several items in a section, refresh, confirm nothing is lost) and click through the new
-   date pickers on mobile/handheld if possible.
+0. **Coco pushes ALL THREE sessions' delivered files** — 2026-08-25's (mobile hamburger nav),
+   2026-08-23 later's (data-loss fix, DatePicker, label audit, CLAUDE.md/AGENTS.md rule), AND
+   the earliest 2026-08-23 session's (items 1-5 below) are all sitting on disk uncommitted, none
+   pushed. First live checks after pushing: (a) open on an actual phone and confirm the
+   bottom-left hamburger appears, the drawer opens/closes cleanly, and it doesn't overlap
+   Dashboard's bell/avatar row; (b) reproduce the original data-loss bug (add several items,
+   refresh, confirm nothing is lost); (c) click through the new date pickers on mobile.
 1. **Coco reviews and pushes the delivered files** via GitHub Desktop — nothing above is live
    until then. First live check afterward: Dashboard tiles, Business Projects pin toggle,
    Finance's new Savings Goal section, all under his own account and (if he can arrange it)
