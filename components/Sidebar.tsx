@@ -1,32 +1,10 @@
 "use client";
 
-import {
-  LayoutGrid,
-  CalendarDays,
-  HeartPulse,
-  Activity,
-  Wallet,
-  Briefcase,
-  Sparkles,
-  Award,
-  Settings,
-  LogOut,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/login/actions";
-
-const NAV_ITEMS = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutGrid, href: "/dashboard" },
-  { key: "calendar", label: "Calendar", icon: CalendarDays, href: "/calendar" },
-  { key: "health", label: "Health & Insurance", icon: HeartPulse, href: "/health" },
-  { key: "fitness", label: "Fitness", icon: Activity, href: "/fitness" },
-  { key: "finance", label: "Finance", icon: Wallet, href: "/finance" },
-  { key: "business", label: "Business Projects", icon: Briefcase, href: "/business" },
-  { key: "vision", label: "Vision & Mood Board", icon: Sparkles, href: "/vision" },
-  { key: "memberships", label: "Memberships", icon: Award, href: "/memberships" },
-  { key: "settings", label: "Settings", icon: Settings, href: "/settings" },
-];
+import { NAV_ITEMS } from "@/lib/navItems";
 
 export default function Sidebar() {
   const pathname = usePathname();
