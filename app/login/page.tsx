@@ -87,6 +87,12 @@ export default function LoginPage({
             Create one
           </Link>
         </p>
+        <p className="mt-1.5 text-center text-xs text-gray-500">
+          Have an invite code?{" "}
+          <Link href="/join" className="text-accent-purple">
+            Join a household
+          </Link>
+        </p>
       </div>
       <LegalFooter />
     </div>

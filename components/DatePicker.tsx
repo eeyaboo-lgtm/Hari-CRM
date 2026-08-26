@@ -39,8 +39,17 @@ function toIso(y: number, m: number, d: number): string {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
+// `dp-select` is a marker class only — see globals.css's light-theme block
+// for why it needs one: the site's light mode force-overrides any
+// `text-white` element to dark text (correct for content that sits on a
+// theme-aware background), but this control's navy background is fixed on
+// purpose (per the original request: "not basic white background either,
+// but a matching blue with white font") and never switches with the site
+// theme, so its text must stay pinned to white too. Without the marker, the
+// global override wins and produces dark-navy text on a dark-navy
+// background in light mode — unreadable.
 const selectCls =
-  "rounded-lg border border-accent-blue/60 bg-[#173247] px-2 py-1.5 text-sm font-medium text-white outline-none " +
+  "dp-select rounded-lg border border-accent-blue/60 bg-[#173247] px-2 py-1.5 text-sm font-medium text-white outline-none " +
   "focus:border-accent-blue focus:ring-1 focus:ring-accent-blue/50 [color-scheme:dark] cursor-pointer";
 
 export default function DatePicker({

@@ -45,6 +45,18 @@
 // adding the card), the reference may point at the temp id. Not an issue at
 // normal human interaction speed; flagged here rather than solved, to keep
 // this pass shippable. See HANDOVER.md.
+//
+// Second incident (2026-08-26 — Allergies again, on mobile): the 2026-08-23
+// fix above only makes an ATTEMPTED write reliable. It missed that `setValue`
+// silently skips the write entirely — no queueSync call, no pending-id
+// tracking, nothing — while `ready` is still false, i.e. during the window
+// between mount and the initial Supabase fetch resolving. On a slow mobile
+// connection that window is long enough to type and submit an entry in, and
+// since no write was ever attempted, self-heal recovery (which only knows
+// about writes that got as far as `sync()` and failed) had nothing to find
+// either. Fixed by recording the latest pre-ready `next` snapshot in
+// `pendingWriteRef` instead of dropping it, then syncing it against the
+// just-fetched server baseline the moment the initial load resolves.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -110,6 +122,10 @@ export function useSupabaseSynced<T extends { id: string }>(
   const staticFieldsRef = useRef(staticFields ?? {});
   staticFieldsRef.current = staticFields ?? {};
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+  // Latest full snapshot from a setValue call made before `ready` — see the
+  // "Second incident" note above. Null unless an edit slipped in during the
+  // pre-fetch window.
+  const pendingWriteRef = useRef<T[] | null>(null);
 
   const sync = useCallback(
     async (next: T[]) => {
@@ -223,17 +239,29 @@ export function useSupabaseSynced<T extends { id: string }>(
         const rows = recovered.length > 0 ? [...recovered, ...serverRows] : serverRows;
 
         // lastSynced reflects confirmed server state only — recovered items
-        // are treated as brand-new inserts on the retry below, since the
-        // server has never actually seen them.
+        // and any pendingWrite below are treated as brand-new inserts on the
+        // retry, since the server has never actually seen them.
         lastSynced.current = serverRows;
-        setValueState(rows);
+
+        // An edit made before this fetch resolved (see "Second incident"
+        // above) already carries `rows`' contents in its own history, since
+        // setValue always builds `next` off the current React state — so it
+        // supersedes `rows` rather than needing to be merged with it.
+        const pendingWrite = pendingWriteRef.current;
+        pendingWriteRef.current = null;
+        const finalRows = pendingWrite ?? rows;
+
+        setValueState(finalRows);
         try {
-          window.localStorage.setItem(localStorageKey, JSON.stringify(rows));
+          window.localStorage.setItem(localStorageKey, JSON.stringify(finalRows));
         } catch {
           // storage full/unavailable — in-memory state still works
         }
 
-        if (recovered.length > 0) {
+        if (pendingWrite) {
+          console.warn(`[useSupabaseSynced:${table}] syncing edit(s) made before initial load finished`);
+          queueSync(pendingWrite);
+        } else if (recovered.length > 0) {
           console.warn(`[useSupabaseSynced:${table}] recovered ${recovered.length} unsaved item(s) from a previous session, retrying save`);
           queueSync(rows);
         }
@@ -258,7 +286,17 @@ export function useSupabaseSynced<T extends { id: string }>(
         } catch {
           // storage full/unavailable — in-memory state still works
         }
-        if (ready) queueSync(next);
+        if (ready) {
+          queueSync(next);
+        } else {
+          // The initial fetch hasn't resolved yet — don't fire a write
+          // against an empty/unknown lastSynced snapshot (that would
+          // re-insert already-saved rows as if new). Record it instead so
+          // the mount effect above can sync it the moment the real server
+          // state is known, rather than dropping it — this is the fix for
+          // "added it, refreshed, it was gone."
+          pendingWriteRef.current = next;
+        }
         return next;
       });
     },

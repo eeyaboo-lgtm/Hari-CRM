@@ -1,7 +1,57 @@
 # PROJECT-STATUS.md — Hari-CRM
 
-Last updated: 2026-08-25. Follows the dated-append convention in CLAUDE.md —
+Last updated: 2026-08-26. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
+
+## 2026-08-26 (session #28) — Real root cause of the allergy save bug found + fixed, invite-code discoverability, light-mode CSS bugs (code delivered, not yet pushed by Coco)
+
+**Confirmed via `git fetch`/`git log` and Render's `list_deploys` API before starting:**
+commit `1acea24` ("Summary updates," containing session #27's mobile nav and everything before
+it) was already `status: live` on Render — Coco has been pushing promptly, this is the first
+session where "is it actually deployed" didn't need to be caveated as unverified.
+
+**1. Health allergy entries still not saving — third report of this symptom.** Confirmed via
+Supabase (`health_allergies` had 1 row after 3 were added) that this was real data loss, not a
+stale-fix report. Read `lib/supabase/useSupabaseSynced.ts`'s own gate logic rather than
+re-guessing: `setValue` skips the Supabase write ENTIRELY — no queue, no pending-id tracking —
+while `ready` is false, i.e. during the window between mount and the initial fetch resolving.
+That window is real on a slower mobile connection, long enough to fill in and submit a form.
+Since no write was ever attempted, the 2026-08-23 self-heal recovery (which only catches writes
+that reached `sync()` and then failed) never saw it either — the entry was just gone, silently,
+with zero trace. This is the actual root cause; the 2026-08-23 fix was real but addressed a
+different failure mode of the same symptom. Fixed via a `pendingWriteRef` in both
+`lib/supabase/useSupabaseSynced.ts` and `lib/supabase/useSchemesSynced.ts` (same bug shape):
+an edit made before `ready` now gets recorded and synced against the real server baseline the
+moment the initial load resolves, instead of being dropped. `lib/supabase/useSavingsGoal.ts`
+checked and confirmed unaffected (action-based, no such gate).
+
+**2. "Invite with code generates a code but where does a person paste it?"** `/join` already
+existed and worked (code entry + Google/email signup, wired to `redeem_household_invite`), but
+neither `/login` nor `/signup` linked to it or mentioned it — someone given just the bare code
+(read aloud, texted) had no way to discover where to enter it. Added a "Have an invite code?
+Join a household" link to both `app/login/page.tsx` and `app/signup/page.tsx`; reworded
+`components/HouseholdInvites.tsx`'s helper text to mention both the copied-link path and the
+new page link.
+
+**3. Light mode bugs — "vertical black bar on the right corner" + "text boxes stuck with black
+text and dark boxes."** Grepped the whole app for hardcoded/arbitrary colors that could bypass
+the light-theme override system. Found one concrete, high-confidence match:
+`components/DatePicker.tsx`'s Day/Month/Year controls keep a fixed dark-navy background in both
+themes on purpose (per the original 2026-08-23 request), but `app/globals.css`'s light-theme
+block force-overrides ANY `text-white` element to dark navy text via `!important` — so in light
+mode, all 30 date-picker instances across the app (Finance/Health/Fitness/Memberships) went
+dark-text-on-dark-background, invisible. Fixed with a `dp-select` marker class on DatePicker's
+controls plus a higher-specificity light-theme rule that pins their text back to white
+regardless of theme. Also added `overflow-x: hidden` to `html, body` as a defensive fix for the
+"black bar" symptom (the standard cure for a stray horizontal-overflow revealing whatever's
+behind the page on mobile) — **this one is NOT confirmed as the actual cause**, no live
+browser/screenshot was available this session; ask for a phone screenshot if it's still there
+after this deploys.
+
+**Verification:** every file checked with a Babel parser (JSX+TypeScript, syntax only) plus a
+manual brace-balance check on the CSS — no `tsc`/`next build`, no live browser check this
+session. Delivered via `SendUserFile` + committed to the real (inner) repo folder via the
+device bridge. Full detail in memory: `project_hari_second_allergy_bug_and_invite_ui.md`.
 
 ## 2026-08-25 (session #27) — Mobile hamburger navigation added (code delivered, not yet pushed by Coco)
 

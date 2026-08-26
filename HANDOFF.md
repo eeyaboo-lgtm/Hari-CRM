@@ -4,12 +4,57 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-25, by Claude Cowork (mobile menu navigation added — phones had zero way
-to switch sections — code delivered to Coco's machine, NOT yet committed/pushed by him). This
-is a SEPARATE, LATER session than the 2026-08-23 work described below; none of that was
-touched this session, and it's all still queued for Coco to push, now three sessions deep.
+Last touched: 2026-08-26, by Claude Cowork (found and fixed the REAL root cause of the allergy
+save bug — the 2026-08-23 fix was real but incomplete — plus invite-code discoverability and
+two light-mode CSS bugs). **Confirmed via `git fetch`+`git log` and Render's deploy API that
+Coco has been pushing promptly this time** — commit `1acea24` ("Summary updates", contains the
+2026-08-25 mobile nav work and everything before it) was live on Render before this session
+started. Today's changes are delivered to Coco's machine but not yet committed/pushed by him —
+check `git status`/`git fetch` fresh next session rather than assuming either way.
 
-## What was just shipped (this session, 2026-08-25)
+## What was just shipped (this session, 2026-08-26)
+
+**Three things reported, all fixed:**
+
+1. **Health allergy entries still not saving, even after the 2026-08-23 fix.** This time
+   confirmed the fix WAS live (Render `list_deploys` showed commit `bc9945b` "Fixes" — the
+   commit containing that rewrite — status `live`), and confirmed via Supabase
+   (`health_allergies` had 1 row, not 3) that entries really were being lost, not just delayed.
+   Found the real bug by reading `useSupabaseSynced.ts`'s own gate logic: `setValue` skips the
+   Supabase write entirely (no queueSync call, no pending-id tracking — nothing) while `ready`
+   is still false, i.e. during the window between mount and the initial fetch resolving. That
+   window is real on a phone with a slower connection — long enough to fill in and submit a
+   form. Since no write was ever attempted, the 2026-08-23 self-heal recovery (which only knows
+   about writes that reached `sync()` and failed) had nothing to find either — the edit was
+   just gone. Fixed in both `lib/supabase/useSupabaseSynced.ts` and
+   `lib/supabase/useSchemesSynced.ts` (same bug shape) via a `pendingWriteRef`: an edit made in
+   that window is now recorded and synced against the real server baseline the moment the
+   initial load finishes, instead of being dropped. `useSavingsGoal.ts` checked and confirmed
+   NOT affected (it's action-based, awaits each Supabase call directly, no such gate).
+2. **"Invite with code generates a code but where does a person paste it?"** Traced it: `/join`
+   already existed and worked fine (code entry + Google/email signup), but neither `/login` nor
+   `/signup` linked to it or mentioned it anywhere — someone who got just the bare code (read
+   aloud, texted) had no way to find it. Added a "Have an invite code? Join a household" link to
+   both pages, and reworded `HouseholdInvites.tsx`'s helper text to mention both paths.
+3. **Light mode bugs — "vertical black bar on the right corner" + "text boxes stuck with black
+   text and dark boxes."** Found and fixed a concrete one: `DatePicker.tsx`'s Day/Month/Year
+   controls keep a fixed dark-navy background in both themes on purpose (per the original
+   request), but the site's light-theme CSS force-overrides ANY `text-white` element to dark
+   text — so in light mode, all 30 date-picker instances across the app went dark-text-on-dark-
+   background, invisible. Fixed with a `dp-select` marker class + a higher-specificity override
+   that pins DatePicker's text to white regardless of theme. Also added `overflow-x: hidden` to
+   `html, body` as a defensive fix for the "black bar" (the standard cure for a stray few-pixel
+   horizontal overflow revealing whatever's behind the page on mobile) — **not confirmed as the
+   actual cause, no live browser/screenshot available this session.** If it's still there after
+   this deploys, it needs an actual phone screenshot to pin down.
+
+**Verification:** every file checked with a Babel parser (syntax only) — no `tsc`/`next build`,
+no live browser check. Full detail: `project_hari_second_allergy_bug_and_invite_ui.md` in
+memory.
+
+---
+
+## What was shipped 2026-08-25
 
 **Trigger:** Coco reported "the mobile web version is lacking menu navigation." Confirmed by
 reading the code: `components/Sidebar.tsx` is `hidden md:flex` — invisible below the `md`
@@ -185,21 +230,20 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
-0. **Coco pushes ALL THREE sessions' delivered files** — 2026-08-25's (mobile hamburger nav),
-   2026-08-23 later's (data-loss fix, DatePicker, label audit, CLAUDE.md/AGENTS.md rule), AND
-   the earliest 2026-08-23 session's (items 1-5 below) are all sitting on disk uncommitted, none
-   pushed. First live checks after pushing: (a) open on an actual phone and confirm the
-   bottom-left hamburger appears, the drawer opens/closes cleanly, and it doesn't overlap
-   Dashboard's bell/avatar row; (b) reproduce the original data-loss bug (add several items,
-   refresh, confirm nothing is lost); (c) click through the new date pickers on mobile.
-1. **Coco reviews and pushes the delivered files** via GitHub Desktop — nothing above is live
-   until then. First live check afterward: Dashboard tiles, Business Projects pin toggle,
-   Finance's new Savings Goal section, all under his own account and (if he can arrange it)
-   a second test account in a different household.
-2. **Two orphan-account manual deletions** (see above) — needs Coco, then a same-session or
-   next-session Claude Cowork/Antigravity cleans up the leftover `households` rows.
-3. **Link the Google account** — Coco signs in as Shenaal, clicks the new button in Settings.
-4. **Resend/email-alerts external setup** — still parked, needs Coco to buy a domain first.
+0. **Coco pushes today's (2026-08-26) delivered files** — everything through the 2026-08-25
+   mobile-nav session is CONFIRMED live (Render `list_deploys` shows commit `1acea24` status
+   `live`, and `git fetch` shows 0 ahead/0 behind `origin/main` as of this session's start).
+   Today's allergy-bug/invite-UX/light-mode fixes are the only thing still sitting on disk
+   uncommitted. First live checks after pushing: (a) add a few Health entries and refresh
+   quickly, ideally on mobile data rather than wifi, to actually exercise the race window the
+   fix targets; (b) check the "Have an invite code?" link works from `/login` and `/signup`;
+   (c) toggle light mode on a phone and check a date picker is readable and the black bar (if
+   it was ever really there) is gone.
+1. **Two orphan-account manual deletions** (Supabase Dashboard → Authentication → Users) —
+   needs Coco, then a same-session or next-session Claude Cowork/Antigravity cleans up the
+   leftover `households` rows via `execute_sql`.
+2. **Link the Google account** — Coco signs in as Shenaal, clicks the button in Settings.
+3. **Resend/email-alerts external setup** — still parked, needs Coco to buy a domain first.
 5. **`schema.sql` is still out of date** — now also missing `finance_savings_goals`,
    `finance_savings_goal_logs`, and the `pinned_dashboard` column on `business_projects` on
    top of the gaps already noted in `AGENTS.md` §5.

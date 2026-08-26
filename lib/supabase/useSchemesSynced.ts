@@ -20,6 +20,14 @@
 // common failure mode is "the tab closed while a request was still in
 // flight," not "the request permanently failed." Revisit if Payment
 // Schemes ever shows the same symptom Allergies did.
+//
+// 2026-08-26: Allergies DID show a second symptom of the same root cause —
+// `setValue` was silently dropping any edit made before the initial
+// Supabase fetch resolved (`ready` still false), with no tracking at all,
+// so there was nothing for the queueing/recovery above to retry. Applied
+// the same pendingWriteRef fix here as in useSupabaseSynced.ts: an edit
+// made in that window is recorded and synced against the real server
+// baseline the moment the initial load finishes, instead of being lost.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +54,7 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
   const lastSynced = useRef<Scheme[]>([]);
   const supabaseRef = useRef(createClient());
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingWriteRef = useRef<Scheme[] | null>(null);
 
   useEffect(() => {
     try {
@@ -81,11 +90,24 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
             })),
         }));
         lastSynced.current = schemes;
-        setValueState(schemes);
+
+        // An edit made before this fetch resolved already carries `schemes`'
+        // contents in its own history (setValue always builds `next` off
+        // current state), so it supersedes `schemes` rather than needing a
+        // merge — see the 2026-08-26 note above.
+        const pendingWrite = pendingWriteRef.current;
+        pendingWriteRef.current = null;
+        const finalSchemes = pendingWrite ?? schemes;
+
+        setValueState(finalSchemes);
         try {
-          window.localStorage.setItem(localStorageKey, JSON.stringify(schemes));
+          window.localStorage.setItem(localStorageKey, JSON.stringify(finalSchemes));
         } catch {
           // storage full/unavailable
+        }
+        if (pendingWrite) {
+          console.warn("[useSchemesSynced] syncing edit(s) made before initial load finished");
+          queueSync(pendingWrite);
         }
       } catch (err) {
         console.error("[useSchemesSynced] load failed", err);
@@ -212,7 +234,13 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         } catch {
           // storage full/unavailable
         }
-        if (ready) queueSync(next);
+        if (ready) {
+          queueSync(next);
+        } else {
+          // Initial fetch hasn't resolved yet — record it instead of
+          // silently dropping it, see the 2026-08-26 note above.
+          pendingWriteRef.current = next;
+        }
         return next;
       });
     },

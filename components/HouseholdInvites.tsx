@@ -104,8 +104,10 @@ export default function HouseholdInvites({ householdId }: { householdId: string 
         <UserPlus size={16} className="text-accent-green" /> Invite someone to your household
       </h3>
       <p className="relative z-10 mb-4 text-xs text-gray-500">
-        They sign in with their own Google account or email — no sharing your login — and enter this code once to
-        join. Each code works one time; generate a new one per person.
+        "Copy link" sends them straight to the code entry screen — or if you just read the code out loud, they'll
+        find a "Have an invite code?" link on the sign-in and sign-up pages that takes them there. They sign in with
+        their own Google account or email — no sharing your login — and enter this code once to join. Each code
+        works one time; generate a new one per person.
       </p>
 
       {!isHead ? (

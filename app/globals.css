@@ -4,6 +4,13 @@
 
 html, body {
   min-height: 100%;
+  /* Guards against a stray few-pixel horizontal overflow (rounding in a
+     flex/grid row, a fixed-width control in a narrow card) turning into a
+     visible strip of whichever background is underneath on the right edge
+     on mobile — reported as a "vertical black bar." Every intentional
+     horizontally-scrolling element in the app scrolls independently inside
+     its own container, so this doesn't affect any of them. */
+  overflow-x: hidden;
   background: radial-gradient(circle at 18% -10%, #2c2f52 0%, #191a2b 42%, #0b0c13 100%);
   background-attachment: fixed;
   color: #e5e7eb;
@@ -72,6 +79,13 @@ html, body {
 [data-theme="light"] .bg-base-card\/60 { background-color: #eef0f8 !important; }
 [data-theme="light"] .border-base-border { border-color: #e2e4f1 !important; }
 [data-theme="light"] .text-white { color: #1c1e2b !important; }
+/* DatePicker's Day/Month/Year controls (components/DatePicker.tsx) keep a
+   fixed dark-navy background in BOTH themes on purpose, so the rule above
+   must not touch their text — it would otherwise turn "white text on navy"
+   into "navy text on navy" the moment light mode is on. Higher specificity
+   (two classes) wins over the single-class rule above regardless of source
+   order. */
+[data-theme="light"] .dp-select.text-white { color: #ffffff !important; }
 [data-theme="light"] .text-gray-100 { color: #23253a !important; }
 [data-theme="light"] .text-gray-200 { color: #2b2d42 !important; }
 [data-theme="light"] .text-gray-300 { color: #3c3f58 !important; }
