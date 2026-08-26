@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { NAV_ITEMS } from "@/lib/navItems";
 import { useHousehold } from "@/lib/HouseholdContext";
+import { clearSyncedLocalCaches } from "@/lib/supabase/ownerMap";
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -67,6 +68,7 @@ export default function Sidebar() {
               window.sessionStorage.removeItem("household.activeMemberId");
               window.sessionStorage.removeItem("household.unlocked");
               window.localStorage.removeItem("admin.viewingHouseholdId");
+              clearSyncedLocalCaches();
             } catch {}
             await logout();
           }}

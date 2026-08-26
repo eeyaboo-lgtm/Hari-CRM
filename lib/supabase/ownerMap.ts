@@ -42,11 +42,62 @@ export function getAdminViewingHouseholdId(): string | null {
   return window.localStorage.getItem(ADMIN_VIEW_KEY);
 }
 
+// Every localStorage key any useSupabaseSynced()/useSchemesSynced()/plain
+// useLocalStorage() hook in the app uses as its offline cache — see
+// Dashboard/GlobalSearch/AlertsBanner leak incident, 2026-08-26 session #30.
+// None of these keys are namespaced by household: they are the SAME key on
+// this device no matter which household's data was last painted into them.
+// That is fine for an ordinary signed-in member (their own household_id
+// never changes underneath them), but it is a real cross-household data
+// leak for admin's "viewing as" mode: switching the viewed household does
+// NOT invalidate this cache, so components that read straight from
+// localStorage (DashboardLiveWidgets, AlertsBanner, GlobalSearch) keep
+// showing the PREVIOUS household's real rows until something else happens
+// to overwrite that exact key. Confirmed in production: admin switched from
+// viewing "Shenaal & Shalini" to viewing "Shannon" and the Dashboard still
+// showed Shenaal's real ENBD Personal Loan. Fix: wipe every one of these
+// keys (plus each sync hook's own ".__pending" companion key) on every
+// admin household switch, so nothing stale can ever be painted again.
+const SYNCED_LOCAL_STORAGE_KEYS = [
+  "business.ideas",
+  "business.stack",
+  "business.projects.v1",
+  "business.ideaDraft",
+  "calendar.events.v1",
+  "finance.accounts.v4",
+  "finance.cards.v4",
+  "finance.cardSpends.v3",
+  "finance.loans.v3",
+  "finance.subs.v3",
+  "finance.schemes.v1",
+  "finance.income.v1",
+  "finance.expenses.v1",
+  "finance.monthlyBudget",
+  "fitness.measurements",
+  "fitness.cycleLogs",
+  "health.conditions",
+  "health.allergies",
+  "health.appointments",
+  "health.insurance",
+  "memberships.items",
+  "vision.goals",
+  "visionBoardItems",
+];
+
+export function clearSyncedLocalCaches() {
+  if (typeof window === "undefined") return;
+  for (const key of SYNCED_LOCAL_STORAGE_KEYS) {
+    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(`${key}.__pending`);
+  }
+}
+
 export function setAdminViewingHousehold(householdId: string | null) {
   if (typeof window === "undefined") return;
   if (householdId) window.localStorage.setItem(ADMIN_VIEW_KEY, householdId);
   else window.localStorage.removeItem(ADMIN_VIEW_KEY);
   clearOwnerMapCache();
+  clearSyncedLocalCaches();
 }
 
 let cached: Promise<OwnerMap> | null = null;
