@@ -4,14 +4,59 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
+Last touched: 2026-08-26, session #30, by Claude Cowork — fixed a Render build break, then
+found and fixed a SECOND independent cross-household leak (localStorage caching, not RLS), and
+confirmed the allergy-save fix from earlier today actually holds. **Coco pushed and confirmed
+everything below field-working same session** — this baton is caught up to a known-good state.
+
+## What was just shipped (this session, 2026-08-26, session #30)
+
+1. **Render build fix.** Commit `a30bb75` ("Database cross account security", session #29's
+   client-side scoping pass) broke the Render build: `Type error: Parameter 'input' implicitly
+   has an 'any' type` in `lib/supabase/client.ts`'s custom `fetch` override (added `input:
+   RequestInfo | URL, init?: RequestInit`). Coco pushed this himself as commit `d57c4ad` ("fix")
+   — confirmed `live` via `list_deploys`.
+2. **Second cross-household leak found + fixed — different root cause than #29's RLS bug.**
+   Reported symptom: admin viewing "Shannon" saw a real "ENBD Personal Loan" that Supabase
+   confirmed belongs to Shenaal & Shalini's household. Root cause: `DashboardLiveWidgets.tsx`,
+   `AlertsBanner.tsx`, and `GlobalSearch.tsx` don't call Supabase at all — they read straight
+   from fixed-string `localStorage` keys (`finance.loans.v3`, `health.allergies`, etc.) that
+   `useSupabaseSynced`/`useSchemesSynced`/`useLocalStorage` populate as an offline cache. None
+   of these ~23 keys are namespaced by household, so switching which household admin is viewing
+   never invalidated the cache — components kept painting the PREVIOUS household's real rows.
+   Fix: `lib/supabase/ownerMap.ts` now exports `clearSyncedLocalCaches()` (wipes all ~23 keys +
+   their `.__pending` companions), called from `setAdminViewingHousehold()` on every switch, and
+   also wired into both `components/Sidebar.tsx` and `components/MobileNav.tsx`'s logout
+   handlers for the shared-device case. **Field-confirmed fixed by Coco same session** (refresh
+   after switching household clears the stale data). See `PROJECT-STATUS.md` session #30 and
+   memory file `project_hari_admin_cache_leak.md` for full detail.
+3. **Allergy-save fix from earlier today (commit `1aff2c9`) field-confirmed working** — no
+   longer needs re-testing, that item is closed.
+
+**Not yet done / worth knowing:**
+- Didn't re-run `git fetch`/`list_deploys` after Coco's "good work" confirmation this session —
+  take his word for this session, but do a fresh check at the start of next session anyway.
+- No `node_modules` on Coco's machine this session, so the `ownerMap.ts`/`Sidebar.tsx`/
+  `MobileNav.tsx` changes were verified by careful manual diff review only, not a real
+  `tsc`/`next build` — Coco's own successful Render deploy is the real build verification here.
+- If a similar "wrong household's data showing" report ever recurs, the FIRST thing to check is
+  whether some OTHER component reads these same fixed localStorage keys directly — only
+  Dashboard/AlertsBanner/GlobalSearch were audited and fixed this session.
+- Standing rule reinforced again: [[feedback_broad_permission_changes]] in Claude's memory —
+  trace the ACTUAL data (query it, don't assume a prior fix covers a new report) before
+  concluding a repeat leak report is stale or already-fixed.
+
+
+## What was just shipped (this session, 2026-08-26 (later still, session #29 continued))
+
 Last touched: 2026-08-26 (later still, session #29 continued), by Claude Cowork — closed out
 the critical cross-household admin data leak at the DATABASE level (not just client-side) and
 verified it live against production. This session's changes across the whole day
 (`lib/navItems.ts`, `components/Sidebar.tsx`, `components/MobileNav.tsx`, `app/strategy/page.tsx`,
 `components/AdminModeBanner.tsx`, `lib/supabase/useSupabaseSynced.ts`,
 `lib/supabase/useSchemesSynced.ts`, `lib/supabase/useSavingsGoal.ts`, `lib/supabase/client.ts`)
-are delivered to Coco's machine via the device bridge but **NOT YET committed/pushed** — push
-via GitHub Desktop before any of it reaches Render. The Supabase migration itself
+were delivered to Coco's machine via the device bridge and have since been pushed and confirmed
+live (see session #30 above). The Supabase migration itself
 (`scope_admin_bypass_to_viewing_household`) is already live in the database — that part needs
 no push, it's already in effect.
 
