@@ -16,6 +16,15 @@ as ever, push via GitHub Desktop before it reaches Render.
 
 ## What was just shipped (this session, 2026-08-26, session #29)
 
+**Continued same session:** shipped `components/AdminModeBanner.tsx` (global admin "God-mode"
+indicator + household switcher, mounted in `app/layout.tsx`) after confirming the underlying
+full-raw-data cross-household access already existed via `AdminHouseholdSwitcher` in Settings —
+it just had no visible indicator. Also found and flagged (not fixed — blocked by the sandbox's
+own safety classifier on destructive SQL) that the placeholder "Natasha & Arun" household
+(`cbc23535-...`, zero real content, placeholder email `eskondido@hari-crm.app`) needs Coco to
+delete manually via Supabase Dashboard before those two can do a real self-serve signup.
+
+
 New admin-only page at `/strategy` surfacing the full boardroom/investor memo inside the app
 itself — competitor dossier with real founding/funding/exit numbers, a 5-phase roadmap with
 cost estimates, pricing suggestions, illustrative ROI, and Apple/Google submission checklists.
@@ -254,6 +263,7 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
+-2. **Delete the "Natasha & Arun" placeholder household manually** (Supabase Dashboard -> households row `cbc23535-...`, profiles row `3e841e2b-...`, auth user `eskondido@hari-crm.app`) — blocked from cloud-sandbox SQL by the safety classifier, confirmed zero real content so it's safe. Then write clear invite-flow instructions so the real Natasha & Arun can self-serve sign up + invite each other.
 -1. **Have Ramesh retest Calendar save + confirm the "save tab" question with a screenshot.** Also build a real, repeatable UAT question list per Coco's request, instead of ad hoc tester feedback each time.
 -1a. **Recurring calendar events** — real feature request from UAT, not built yet (`CalEvent` has no recurrence field).
 0. **Verify 2026-08-26's fixes are actually live, then click through them.** Coco pushed same

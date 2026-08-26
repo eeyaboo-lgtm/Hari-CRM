@@ -692,3 +692,52 @@ session. No functional change, just noting it for the record since it wasn't in 
 questions rather than ad hoc testing — worth building a real UAT checklist doc before the next
 external tester (queued in HANDOFF.md).
 
+## 2026-08-26 (session #29, continued) — Admin Super-Access banner shipped, Natasha & Arun cleanup blocked
+
+**Trigger:** Coco logged in as admin, couldn't see the new Strategy Memo nav item, and separately
+said admin "doesn't feel like an admin" — no cross-household overview. Investigated live (not
+guessed):
+
+- Confirmed `6ea9c61` ("LifeOS Strategy Admin-Only", the previous session's work) was already
+  committed+pushed by Coco himself and live on Render (finished 15:54 UTC/19:54 Dubai) — so the
+  missing nav item was very likely a stale browser tab/bundle from before that deploy finished,
+  not a code bug. `isAdmin` is a real DB column (`profiles.is_admin`) tied to a dedicated
+  `admin@hari-crm.app` account (separate from Coco's own `hilaryuae@gmail.com` household
+  account) and is computed correctly regardless of which household is being viewed — confirmed
+  by reading `HouseholdContext.tsx`'s fetch logic directly.
+- **The "God-mode" capability Coco wants already existed** — `AdminHouseholdSwitcher` (inline in
+  `app/settings/page.tsx`) already lets admin pick any household and have every page
+  (Health/Finance/Business/Calendar/etc.) show that household's real data, via
+  `admin.viewingHouseholdId` in localStorage + `HouseholdContext`'s `hid = getAdminViewingHouseholdId()`.
+  It just had zero visual indicator and was buried in Settings — which is why it didn't feel
+  like "admin mode" even though the underlying access was already full and real.
+- **Shipped:** new `components/AdminModeBanner.tsx`, mounted globally in `app/layout.tsx` (inside
+  `ProfileGate`, above `{children}`). Renders nothing for non-admins; for the real admin account,
+  shows a persistent red sticky banner — "Admin Super-Access Mode — Viewing: {household}" — with
+  a household-switcher dropdown built into the banner itself (same underlying mechanism as the
+  Settings switcher, just surfaced everywhere instead of buried on one page).
+- Asked Coco directly (via AskUserQuestion) how much cross-household visibility he actually
+  wanted, given the household list already has real other people on it (Natasha & Arun, Shannon,
+  Ramesh, Shalu/H Nonis), not just his own family — he confirmed: full raw-data god-mode, exactly
+  as above, is what he wants.
+
+**Also requested: delete the "Natasha & Arun" household.** Investigated first, not just acted:
+confirmed via live Supabase queries this is a hand-seeded placeholder (single profile, display
+name literally "Natasha & Arun", email `eskondido@hari-crm.app` — an internal placeholder
+address matching the `admin@hari-crm.app` pattern, not a real signup) with **zero content rows**
+in any table (health/finance/business/memberships/calendar/invites all checked, all zero) — safe
+to delete. **Blocked:** the `DELETE FROM households` / `DELETE FROM profiles` SQL was blocked by
+the cloud sandbox's own safety classifier (same class of block noted before for `auth.*` row
+deletes — see [[feedback_git_push_proxy_block]]-adjacent history). **Needs Coco to do manually:**
+in Supabase Dashboard, delete the `households` row `cbc23535-4240-4b75-80a9-851fd3fb74eb`
+("Natasha & Arun"), the `profiles` row `3e841e2b-2982-44d8-9492-b3395f287fd8`, and the
+`auth.users` account for `eskondido@hari-crm.app` (Authentication -> Users). Once gone, Natasha
+and Arun can do a real self-serve Google sign-up + invite-each-other flow.
+
+**Queued, secondary per Coco:** write clear step-by-step invite instructions (one person signs
+up with Google, invites the other into the same household) — not done yet, lower priority than
+the god-mode banner.
+
+**Verification:** bracket/JSX-tag balance checked via script only, same as the Strategy Memo page
+earlier this session — no `node_modules`, no `tsc`/`next build`. Not committed/pushed yet.
+
