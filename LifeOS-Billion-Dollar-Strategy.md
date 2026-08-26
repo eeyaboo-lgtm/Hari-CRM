@@ -131,3 +131,39 @@ The short version: the hard part (the database-level wall) is already built and 
 
 ---
 *Sources: [Best Family Organizer Apps 2026](https://familyfolder.com/blog/best-family-organizer-app.html), [Household Management Apps 2026](https://onehaus.app/blog/best-household-management-apps-2026), [Family Organizer Comparisons](https://gethomsy.com/blog/comparisons/best-family-organizer-apps-2026), [Quicken: Best Tools for Family Finances 2026](https://www.quicken.com/blog/best-tools-and-apps-for-managing-family-and-household-finances-in-2026/), [Quicken: Best Apps for Family Responsibilities 2026](https://www.quicken.com/blog/best-apps-to-manage-family-responsibilities-and-collaboration-in-2026/), [Monarch Review](https://www.techradar.com/pro/software-services/monarch-review), [Cozi Reviews](https://justuseapp.com/en/app/407108860/cozi-family-organizer/reviews), [Housekeeping Platform Market Report 2026](https://www.researchandmarkets.com/reports/5980398/housekeeping-platform-market-report), [Life360: How Crash Detection Works](https://www.life360.com/learn/how-does-crash-detection-work), [Life360 Drive Detection & Analysis](https://support.life360.com/hc/en-us/articles/23053499870487-Drive-Detection-Analysis), [Monarch Money Review — RobBerger](https://robberger.com/monarch-money-review/), [Plaid Integration Cost Guide 2026](https://www.fintegrationfs.com/post/how-much-does-plaid-integration-cost-in-the-us), [Rocket Money — What Is It](https://www.rocketmoney.com/learn/personal-finance/what-is-rocket-money), [FamilyWall Review — Parent Tech Made Easy](https://parenttechmadeeasy.co.uk/familywall-app-review-the-ultimate-digital-hub-for-your-clan-or-just-more-screen-time/), [Quicken Simplifi: Projected Cash Flow](https://www.quicken.com/features/projected-cashflow/), [Quicken Simplifi Review 2026 — MoneyCrashers](https://www.moneycrashers.com/simplifi-quicken-review/)*
+
+
+---
+
+## 2026-08-26 (addendum) — App-store & investor readiness check (Claude Cowork)
+
+Coco asked directly: does Hari-CRM/LifeOS have a real shot at public Android/iOS app-store
+revenue, viewed from a platform-boardroom angle and an investor angle? Full memo published as
+an artifact (not duplicated here in full) — key findings to keep on file:
+
+**Platform/store economics:** Cozi ranks ~#94 overall / #101 Productivity on Google Play US;
+FamilyWall has 5M+ installs at 4.8★ — the shelf is real and occupied. But blended CPI runs
+~$4.70 iOS / ~$3.70 Android, and finance-adjacent categories run $8–12 per acquired user.
+Industry D30 retention is only 3–7% across most categories. Getting a real store listing also
+needs subscription billing via StoreKit/Play Billing (not Stripe), push notifications, and a
+native-feeling shell (Capacitor wrap is the realistic bridge, not a full rewrite) — plus the
+platforms keep 15–30% of subscription revenue.
+
+**Investor comparables:** Life360 is the one hard proof this category can reach real scale —
+$489.5M FY2025 revenue on 95.8M Q4'25 MAU — but it got there on one emotionally urgent, highly
+viral job (child safety), not a broad multi-module product, and over roughly a decade. Recent
+funding in the "family app" niche is thin: SuperFam (privacy-first family app) raised only a
+$400K pre-seed; Bling (kids' debit cards) raised a much larger $12M Series A on a narrow fintech
+wedge; even Life360's own Series A was just $3.5M. Pattern: investors fund narrow, viral wedges
+readily in this space, not broad "does everything" pitches, pre-traction.
+
+**Verdict:** real niche subscription business is plausible, not an obviously-billion-dollar
+category, and NOT investor-ready today (zero external users, zero retention data, zero paid
+conversion). The gate before "app store" is the real next milestone, matching Phase 1 above:
+self-serve onboarding + RLS security audit + 10–20 real outside households with 60+ day
+retention data + evidence the invite loop actually pulls a household in + a few people
+voluntarily paying $6–9/mo. That evidence is what a store listing needs anyway, and what turns
+this from "good research" into something fundable.
+
+*Sources: Life360 Q4 2025 investor release & FY2025 10-K, Similarweb (Cozi), AdAction 2026 UA
+cost benchmarks, SuperFam funding coverage (BW Disrupt), Life360 early Series A (TechCrunch).*

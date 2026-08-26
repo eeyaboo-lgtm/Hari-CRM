@@ -5,9 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { NAV_ITEMS } from "@/lib/navItems";
+import { useHousehold } from "@/lib/HouseholdContext";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { isAdmin } = useHousehold();
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <aside className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-white/5 bg-white/[0.03] p-5 backdrop-blur-xl">
@@ -22,7 +25,7 @@ export default function Sidebar() {
         </div>
 
         <nav className="space-y-1">
-          {NAV_ITEMS.map(({ key, label, icon: Icon, href }) => {
+          {items.map(({ key, label, icon: Icon, href }) => {
             const isActive = pathname === href || pathname?.startsWith(href + "/");
             return (
               <Link

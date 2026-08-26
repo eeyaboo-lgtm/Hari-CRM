@@ -4,15 +4,37 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-26, by Claude Cowork (found and fixed the REAL root cause of the allergy
-save bug — the 2026-08-23 fix was real but incomplete — plus invite-code discoverability and
-two light-mode CSS bugs). **Coco pushed same-day: confirmed via `git fetch` (0 ahead/0 behind
-`origin/main`) that commit `1aff2c9` ("UI Fixes to dark mode and health saving updates",
-contains everything from this session) is on GitHub.** Render's `list_deploys` showed that
-commit's deploy as `status: update_in_progress` (not yet `live`) at the moment this session
-ended — **check Render deploy status fresh next session before assuming it's actually live**,
-same discipline as always: a push landing on GitHub and a deploy finishing on Render are two
-different confirmations, don't conflate them.
+Last touched: 2026-08-26 (later, session #29), by Claude Cowork — shipped an admin-only
+`/strategy` page (the app-store/investor memo, for motivation + institutional memory) and
+triaged UAT feedback Coco's dad emailed in. **Confirmed via `git log`/`list_deploys` that
+commit `1aff2c9`'s fix (the allergy/health pendingWriteRef fix) has been live since ~18:07
+Dubai time today** — a docs-only commit `0457721` landed after it (Coco's own, HANDOFF/
+PROJECT-STATUS edits only, no app code). This session's own changes (`lib/navItems.ts`,
+`components/Sidebar.tsx`, `components/MobileNav.tsx`, new `app/strategy/page.tsx`) are
+delivered to Coco's machine via the device bridge but **NOT YET committed/pushed** — same
+as ever, push via GitHub Desktop before it reaches Render.
+
+## What was just shipped (this session, 2026-08-26, session #29)
+
+New admin-only page at `/strategy` surfacing the full boardroom/investor memo inside the app
+itself — competitor dossier with real founding/funding/exit numbers, a 5-phase roadmap with
+cost estimates, pricing suggestions, illustrative ROI, and Apple/Google submission checklists.
+Gated via `useHousehold().isAdmin` (same pattern as Settings' admin-only sections); nav item
+added to `lib/navItems.ts` with a new `adminOnly` flag, filtered in both `Sidebar.tsx` and
+`MobileNav.tsx`. First pass — functional over polished, per explicit instruction to rush a
+viewable version; expect a follow-up pass to tighten the visual design.
+
+Also triaged Ramesh's (Coco's dad, testing from Sri Lanka) UAT feedback — full detail in
+`PROJECT-STATUS.md`'s new session #29 entry. Headline: the "Calendar not saving" report almost
+certainly predates today's `1aff2c9` fix (his test works out to ~12:42 Dubai time, the fix went
+live ~18:07) — needs a live retest, not a re-diagnosis, unless it's still broken after that.
+Two real open items queued below: recurring calendar events (not supported, feature request)
+and a "couldn't find a save tab" UX complaint (needs to know which exact screen).
+
+**Verification this session:** bracket/JSX-tag balance checked via script only — no
+`node_modules` on the real working tree, so no `tsc`/`next build`; not click-tested live.
+
+---
 
 ## What was just shipped (this session, 2026-08-26)
 
@@ -232,6 +254,8 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
+-1. **Have Ramesh retest Calendar save + confirm the "save tab" question with a screenshot.** Also build a real, repeatable UAT question list per Coco's request, instead of ad hoc tester feedback each time.
+-1a. **Recurring calendar events** — real feature request from UAT, not built yet (`CalEvent` has no recurrence field).
 0. **Verify 2026-08-26's fixes are actually live, then click through them.** Coco pushed same
    day (commit `1aff2c9` confirmed on GitHub via `git fetch`), but Render showed that deploy as
    still `update_in_progress` when this session ended — confirm it flipped to `live` first.

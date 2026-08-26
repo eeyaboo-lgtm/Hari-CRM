@@ -640,3 +640,55 @@ This session, in the real working tree (repo root):
 
 No application code, database schema, or deployed behavior changed this session — purely
 documentation, as scoped.
+
+## 2026-08-26 (session #29) — Admin-only Strategy Memo page shipped + dad's UAT feedback triaged
+
+**Trigger:** Coco asked for the app-store/investor memo (see addendum in
+`LifeOS-Billion-Dollar-Strategy.md`) to live inside the app itself, admin-only, for motivation
+and institutional memory. Also passed along UAT notes his father (Ramesh, testing from Sri
+Lanka) emailed after using the app.
+
+**Shipped — new `/strategy` page, admin-only:**
+- `lib/navItems.ts` — added an `adminOnly?: boolean` field to `NavItem` and a new "Strategy
+  Memo" entry (Rocket icon) with `adminOnly: true`.
+- `components/Sidebar.tsx` / `components/MobileNav.tsx` — both now filter `NAV_ITEMS` through
+  `useHousehold().isAdmin` before rendering, so non-admin household members never see the item.
+- `app/strategy/page.tsx` (new) — gates itself the same way (`isAdmin` + redirect to
+  `/dashboard`), containing: the honest scorecard, a 6-company competitor dossier with real
+  sourced founding/funding/exit numbers (Cozi, FamilyWall, Life360, Quicken/Simplifi, Monarch
+  Money, Rocket Money/Truebill), a 5-phase execution roadmap with cost estimates, suggested
+  freemium pricing, illustrative (clearly-labeled-as-not-a-forecast) ROI scenarios, and Apple/
+  Google submission checklists. First pass, functional over polished per explicit instruction
+  to rush a viewable version.
+- **Verification:** bracket/JSX-tag balance checked via script (no `node_modules` on the real
+  working tree, so no `tsc`/`next build` this session) — not click-tested live.
+
+**Also discovered this session:** a docs-only commit `0457721` ("Minor bug fixes and
+changelogs", HANDOFF.md/PROJECT-STATUS.md edits only, no app code) was pushed and live as of
+18:06 Dubai time today — authored directly by Coco, not by a Claude Cowork or Antigravity
+session. No functional change, just noting it for the record since it wasn't in memory yet.
+
+**Ramesh's (dad, Sri Lanka) UAT feedback — triaged, not yet independently confirmed live:**
+1. Health & Insurance past-date entry accepted — this is correct/intended behavior (logging a
+   past diagnosis/appointment date should work).
+2. Recurring schedules — NOT currently supported; `CalEvent` has no recurrence field. Real
+   feature request, not a bug. Queued.
+3. Allergy history "link between this text box and previous" — unclear what he meant, needs
+   clarification from him or a screenshot before acting.
+4. "Couldn't find a save tab" — most of this app auto-saves on change (via
+   `useSupabaseSynced`) with a global `SaveStatusIndicator` rather than a page-level Save
+   button; he may not have noticed it, or the flow he was on doesn't surface it clearly enough.
+   Needs to know exactly which screen.
+5. **Calendar not saving** — same symptom shape as the historical allergy/health data-loss
+   bug. Calendar's `app/calendar/page.tsx` uses the same `useSupabaseSynced` hook that got the
+   `pendingWriteRef` fix in commit `1aff2c9`, live since ~18:07 Dubai time today. Ramesh's test
+   ("12:09, 7 hours ago" from a ~15:42 UTC / 19:42 Dubai session) works out to roughly 12:42
+   Dubai time — about 5+ hours BEFORE that fix went live. Likely already fixed, but not
+   confirmed — needs a live retest, and if it's still broken, it's a different bug from the one
+   already fixed and needs fresh investigation.
+6. Logout/login, Health & Insurance save — confirmed working smoothly, no action needed.
+
+**Coco's own note:** wants a stringent UAT going forward based on a fixed, repeatable list of
+questions rather than ad hoc testing — worth building a real UAT checklist doc before the next
+external tester (queued in HANDOFF.md).
+

@@ -24,9 +24,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/login/actions";
 import { NAV_ITEMS, isNavRoute } from "@/lib/navItems";
+import { useHousehold } from "@/lib/HouseholdContext";
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const { isAdmin } = useHousehold();
+  const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const [open, setOpen] = useState(false);
 
   // Close automatically on any route change (covers back/forward nav, not
@@ -89,7 +92,7 @@ export default function MobileNav() {
               </div>
 
               <nav className="space-y-1">
-                {NAV_ITEMS.map(({ key, label, icon: Icon, href }) => {
+                {items.map(({ key, label, icon: Icon, href }) => {
                   const isActive = pathname === href || pathname?.startsWith(href + "/");
                   return (
                     <Link

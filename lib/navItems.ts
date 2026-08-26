@@ -13,6 +13,7 @@ import {
   Sparkles,
   Award,
   Settings,
+  Rocket,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,9 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   href: string;
+  // Admin-only items (e.g. the internal strategy memo) are filtered out of
+  // both Sidebar and MobileNav for non-admin household members.
+  adminOnly?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -33,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: "vision", label: "Vision & Mood Board", icon: Sparkles, href: "/vision" },
   { key: "memberships", label: "Memberships", icon: Award, href: "/memberships" },
   { key: "settings", label: "Settings", icon: Settings, href: "/settings" },
+  { key: "strategy", label: "Strategy Memo", icon: Rocket, href: "/strategy", adminOnly: true },
 ];
 
 // True when the current pathname belongs to one of the sections above —
