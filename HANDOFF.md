@@ -6,11 +6,13 @@ always reflect only the current moment. For the full append-only history, see
 
 Last touched: 2026-08-26, by Claude Cowork (found and fixed the REAL root cause of the allergy
 save bug — the 2026-08-23 fix was real but incomplete — plus invite-code discoverability and
-two light-mode CSS bugs). **Confirmed via `git fetch`+`git log` and Render's deploy API that
-Coco has been pushing promptly this time** — commit `1acea24` ("Summary updates", contains the
-2026-08-25 mobile nav work and everything before it) was live on Render before this session
-started. Today's changes are delivered to Coco's machine but not yet committed/pushed by him —
-check `git status`/`git fetch` fresh next session rather than assuming either way.
+two light-mode CSS bugs). **Coco pushed same-day: confirmed via `git fetch` (0 ahead/0 behind
+`origin/main`) that commit `1aff2c9` ("UI Fixes to dark mode and health saving updates",
+contains everything from this session) is on GitHub.** Render's `list_deploys` showed that
+commit's deploy as `status: update_in_progress` (not yet `live`) at the moment this session
+ended — **check Render deploy status fresh next session before assuming it's actually live**,
+same discipline as always: a push landing on GitHub and a deploy finishing on Render are two
+different confirmations, don't conflate them.
 
 ## What was just shipped (this session, 2026-08-26)
 
@@ -230,15 +232,13 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
-0. **Coco pushes today's (2026-08-26) delivered files** — everything through the 2026-08-25
-   mobile-nav session is CONFIRMED live (Render `list_deploys` shows commit `1acea24` status
-   `live`, and `git fetch` shows 0 ahead/0 behind `origin/main` as of this session's start).
-   Today's allergy-bug/invite-UX/light-mode fixes are the only thing still sitting on disk
-   uncommitted. First live checks after pushing: (a) add a few Health entries and refresh
-   quickly, ideally on mobile data rather than wifi, to actually exercise the race window the
-   fix targets; (b) check the "Have an invite code?" link works from `/login` and `/signup`;
-   (c) toggle light mode on a phone and check a date picker is readable and the black bar (if
-   it was ever really there) is gone.
+0. **Verify 2026-08-26's fixes are actually live, then click through them.** Coco pushed same
+   day (commit `1aff2c9` confirmed on GitHub via `git fetch`), but Render showed that deploy as
+   still `update_in_progress` when this session ended — confirm it flipped to `live` first.
+   Then: (a) add a few Health entries and refresh quickly, ideally on mobile data rather than
+   wifi, to actually exercise the race window the fix targets; (b) check the "Have an invite
+   code?" link works from `/login` and `/signup`; (c) toggle light mode on a phone and check a
+   date picker is readable and the black bar (if it was ever really there) is gone.
 1. **Two orphan-account manual deletions** (Supabase Dashboard → Authentication → Users) —
    needs Coco, then a same-session or next-session Claude Cowork/Antigravity cleans up the
    leftover `households` rows via `execute_sql`.

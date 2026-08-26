@@ -3,7 +3,7 @@
 Last updated: 2026-08-26. Follows the dated-append convention in CLAUDE.md —
 new sessions add a new section below, never overwrite this one.
 
-## 2026-08-26 (session #28) — Real root cause of the allergy save bug found + fixed, invite-code discoverability, light-mode CSS bugs (code delivered, not yet pushed by Coco)
+## 2026-08-26 (session #28) — Real root cause of the allergy save bug found + fixed, invite-code discoverability, light-mode CSS bugs (pushed same-day as commit `1aff2c9`, Render deploy in progress as of session end — verify live next session)
 
 **Confirmed via `git fetch`/`git log` and Render's `list_deploys` API before starting:**
 commit `1acea24` ("Summary updates," containing session #27's mobile nav and everything before
