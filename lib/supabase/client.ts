@@ -17,7 +17,7 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       global: {
-        fetch: (input, init) => {
+        fetch: (input: RequestInfo | URL, init?: RequestInit) => {
           const headers = new Headers(init?.headers);
           const hid = getAdminViewingHouseholdId();
           if (hid) headers.set("x-admin-viewing-household", hid);
