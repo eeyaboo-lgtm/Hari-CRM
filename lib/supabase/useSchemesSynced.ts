@@ -69,9 +69,21 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
       const supabase = supabaseRef.current;
       try {
         const ownerMap = await getOwnerMap(supabase);
+        // Same admin-scoping fix as useSupabaseSynced.ts (2026-08-26) — see
+        // that file's comment for the full explanation. is_admin() bypasses
+        // RLS globally, not per-viewed-household, so filter explicitly here.
+        const adminIds = ownerMap.isAdmin
+          ? (ownerMap.memberIds.length > 0 ? ownerMap.memberIds : ["00000000-0000-0000-0000-000000000000"])
+          : null;
+        let schemeQuery = supabase.from(SCHEME_TABLE).select("*");
+        let itemQuery = supabase.from(ITEM_TABLE).select("*");
+        if (adminIds) {
+          schemeQuery = schemeQuery.in("owner_id", adminIds);
+          itemQuery = itemQuery.in("owner_id", adminIds);
+        }
         const [{ data: schemeRows, error: e1 }, { data: itemRows, error: e2 }] = await Promise.all([
-          supabase.from(SCHEME_TABLE).select("*"),
-          supabase.from(ITEM_TABLE).select("*"),
+          schemeQuery,
+          itemQuery,
         ]);
         if (e1) throw e1;
         if (e2) throw e2;

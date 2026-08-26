@@ -80,9 +80,20 @@ export function useSavingsGoal() {
         setMemberNames(names);
       }
 
+      // Same admin-scoping fix as useSupabaseSynced.ts (2026-08-26) — see
+      // that file's comment for the full explanation.
+      const adminIds = ownerMap.isAdmin
+        ? (ownerMap.memberIds.length > 0 ? ownerMap.memberIds : ["00000000-0000-0000-0000-000000000000"])
+        : null;
+      let goalsQuery = supabase.from("finance_savings_goals").select("*");
+      let logsQuery = supabase.from("finance_savings_goal_logs").select("*");
+      if (adminIds) {
+        goalsQuery = goalsQuery.in("owner_id", adminIds);
+        logsQuery = logsQuery.in("owner_id", adminIds);
+      }
       const [{ data: goalRows, error: goalErr }, { data: logRows, error: logErr }] = await Promise.all([
-        supabase.from("finance_savings_goals").select("*"),
-        supabase.from("finance_savings_goal_logs").select("*"),
+        goalsQuery,
+        logsQuery,
       ]);
 
       if (goalErr) {

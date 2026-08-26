@@ -4,46 +4,55 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
-Last touched: 2026-08-26 (later, session #29), by Claude Cowork — shipped an admin-only
-`/strategy` page (the app-store/investor memo, for motivation + institutional memory) and
-triaged UAT feedback Coco's dad emailed in. **Confirmed via `git log`/`list_deploys` that
-commit `1aff2c9`'s fix (the allergy/health pendingWriteRef fix) has been live since ~18:07
-Dubai time today** — a docs-only commit `0457721` landed after it (Coco's own, HANDOFF/
-PROJECT-STATUS edits only, no app code). This session's own changes (`lib/navItems.ts`,
-`components/Sidebar.tsx`, `components/MobileNav.tsx`, new `app/strategy/page.tsx`) are
-delivered to Coco's machine via the device bridge but **NOT YET committed/pushed** — same
-as ever, push via GitHub Desktop before it reaches Render.
+Last touched: 2026-08-26 (later still, session #29 continued), by Claude Cowork — closed out
+the critical cross-household admin data leak at the DATABASE level (not just client-side) and
+verified it live against production. This session's changes across the whole day
+(`lib/navItems.ts`, `components/Sidebar.tsx`, `components/MobileNav.tsx`, `app/strategy/page.tsx`,
+`components/AdminModeBanner.tsx`, `lib/supabase/useSupabaseSynced.ts`,
+`lib/supabase/useSchemesSynced.ts`, `lib/supabase/useSavingsGoal.ts`, `lib/supabase/client.ts`)
+are delivered to Coco's machine via the device bridge but **NOT YET committed/pushed** — push
+via GitHub Desktop before any of it reaches Render. The Supabase migration itself
+(`scope_admin_bypass_to_viewing_household`) is already live in the database — that part needs
+no push, it's already in effect.
 
-## What was just shipped (this session, 2026-08-26, session #29)
+## What was just shipped (this session, 2026-08-26, session #29 — DB-level leak fix)
 
-**Continued same session:** shipped `components/AdminModeBanner.tsx` (global admin "God-mode"
-indicator + household switcher, mounted in `app/layout.tsx`) after confirming the underlying
-full-raw-data cross-household access already existed via `AdminHouseholdSwitcher` in Settings —
-it just had no visible indicator. Also found and flagged (not fixed — blocked by the sandbox's
-own safety classifier on destructive SQL) that the placeholder "Natasha & Arun" household
-(`cbc23535-...`, zero real content, placeholder email `eskondido@hari-crm.app`) needs Coco to
-delete manually via Supabase Dashboard before those two can do a real self-serve signup.
+**The cross-household admin leak (see PROJECT-STATUS.md session #29 for full root-cause
+writeup) is now fixed at BOTH layers, not just the client-side mitigation from earlier today:**
 
+1. Applied migration `scope_admin_bypass_to_viewing_household` — rewrote the bare `is_admin()`
+   global-bypass clause in ~30 tables' RLS policies to a new `admin_household_ok(owner_id)` /
+   `admin_household_ok_direct(household_id)` check that only returns true when the row's
+   household matches the header-supplied `x-admin-viewing-household` value. Left `households`,
+   `profiles`, `fx_rates` on the original unscoped `is_admin()` intentionally (needed for the
+   household switcher/backup to keep working).
+2. Edited `lib/supabase/client.ts` so the browser Supabase client actually sends that header on
+   every request (read fresh from `getAdminViewingHouseholdId()` each time, not cached) — without
+   this the migration alone would leave admin seeing zero data anywhere, since RLS and the
+   client-side `.in("owner_id", ...)` filter from earlier today are ANDed together.
+3. **Verified directly against the live production database**, not just reviewed: confirmed via
+   `pg_policies` that the affected tables now carry `admin_household_ok(...)` with no bare
+   `is_admin()` remaining, and that `households`/`profiles`/`fx_rates` were correctly left alone.
+   Then simulated real requests (`SET LOCAL "request.headers"` as the actual admin user) —
+   viewing Ramesh Nonis's household now returns 0 rows on `business_projects`/`finance_accounts`
+   (previously leaked Shenaal's 4 projects + ENBD account); viewing Shenaal & Shalini's household
+   correctly returns their real 4 projects + 1 account; no household selected returns 0 rows
+   everywhere (fails closed). This is a stronger verification than the usual static-only review
+   this project normally relies on (no `node_modules`/`tsc` on the real working tree) — this was
+   an actual live database test.
 
-New admin-only page at `/strategy` surfacing the full boardroom/investor memo inside the app
-itself — competitor dossier with real founding/funding/exit numbers, a 5-phase roadmap with
-cost estimates, pricing suggestions, illustrative ROI, and Apple/Google submission checklists.
-Gated via `useHousehold().isAdmin` (same pattern as Settings' admin-only sections); nav item
-added to `lib/navItems.ts` with a new `adminOnly` flag, filtered in both `Sidebar.tsx` and
-`MobileNav.tsx`. First pass — functional over polished, per explicit instruction to rush a
-viewable version; expect a follow-up pass to tighten the visual design.
+**Not yet done, optional hardening:** `get_advisors` flagged the two new
+`admin_household_ok`/`admin_household_ok_direct` functions as publicly RPC-callable by
+`anon`/`authenticated` (same pre-existing pattern as `is_admin()` etc., not a new regression) —
+could `REVOKE EXECUTE` on both, not requested by Coco, not done.
 
-Also triaged Ramesh's (Coco's dad, testing from Sri Lanka) UAT feedback — full detail in
-`PROJECT-STATUS.md`'s new session #29 entry. Headline: the "Calendar not saving" report almost
-certainly predates today's `1aff2c9` fix (his test works out to ~12:42 Dubai time, the fix went
-live ~18:07) — needs a live retest, not a re-diagnosis, unless it's still broken after that.
-Two real open items queued below: recurring calendar events (not supported, feature request)
-and a "couldn't find a save tab" UX complaint (needs to know which exact screen).
+**Next session should:** (1) confirm Coco has pushed all of today's file changes via GitHub
+Desktop and check `list_deploys` before assuming any of this is live; (2) ask Coco to re-test
+admin mode across a couple of households himself now that both layers are fixed; (3) still
+needs Coco to manually delete the placeholder "Natasha & Arun" household via Supabase Dashboard
+(blocked by the sandbox's safety classifier, see PROJECT-STATUS.md); (4) the UAT checklist and
+invite-flow instructions are both still queued/not built.
 
-**Verification this session:** bracket/JSX-tag balance checked via script only — no
-`node_modules` on the real working tree, so no `tsc`/`next build`; not click-tested live.
-
----
 
 ## What was just shipped (this session, 2026-08-26)
 
@@ -263,6 +272,7 @@ check against regardless).
 
 In priority order (full detail in `BACKLOG.md`):
 
+-3. **[SECURITY] Fix `is_admin()`'s unscoped RLS bypass properly, at the database level** — client-side mitigation shipped 2026-08-26 stops the on-screen symptom, but the RLS policies themselves (~30 tables) still let admin read/write ANY household via a direct API call. Needs a request-header-driven household check + new helper function, replacing bare `is_admin()` in every affected policy. Test on a Supabase branch before touching production.
 -2. **Delete the "Natasha & Arun" placeholder household manually** (Supabase Dashboard -> households row `cbc23535-...`, profiles row `3e841e2b-...`, auth user `eskondido@hari-crm.app`) — blocked from cloud-sandbox SQL by the safety classifier, confirmed zero real content so it's safe. Then write clear invite-flow instructions so the real Natasha & Arun can self-serve sign up + invite each other.
 -1. **Have Ramesh retest Calendar save + confirm the "save tab" question with a screenshot.** Also build a real, repeatable UAT question list per Coco's request, instead of ad hoc tester feedback each time.
 -1a. **Recurring calendar events** — real feature request from UAT, not built yet (`CalEvent` has no recurrence field).

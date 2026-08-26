@@ -221,6 +221,17 @@ export function useSupabaseSynced<T extends { id: string }>(
       try {
         const ownerMap = await getOwnerMap(supabase);
         let query = supabase.from(table).select("*");
+        // 2026-08-26: is_admin() in every RLS policy on this table is an
+        // unscoped global bypass across ALL households, not limited to the
+        // one household admin is "viewing as" (that's tracked client-side
+        // only, in localStorage, which Postgres/RLS can't see). Until the
+        // RLS itself is fixed to be household-aware, filter explicitly here
+        // so admin's fetch never returns another household's real rows.
+        // No household selected yet -> fetch nothing rather than everything.
+        if (ownerMap.isAdmin) {
+          const ids = ownerMap.memberIds.length > 0 ? ownerMap.memberIds : ["00000000-0000-0000-0000-000000000000"];
+          query = query.in("owner_id", ids);
+        }
         for (const [k, v] of Object.entries(staticFieldsRef.current)) query = query.eq(k, v as any);
         const { data, error } = await query;
         if (error) throw error;
