@@ -166,16 +166,16 @@ function MeasurementCard({
       <div className="rounded-xl border border-accent-purple/40 bg-base-card/60 p-3 text-sm">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
             <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <label className="mb-1 block text-xs text-gray-500">Date</label>
             <DatePicker value={entry.entryDate} onChange={(v) => onUpdate({ ...entry, entryDate: v })} />
           </div>
           {MEASUREMENT_FIELDS.map((f) => (
             <div key={String(f.key)}>
-              <label className="mb-1 block text-[11px] text-gray-500">{f.label} ({f.unit})</label>
+              <label className="mb-1 block text-xs text-gray-500">{f.label} ({f.unit})</label>
               <input
                 type="number"
                 value={(entry[f.key] as number | undefined) ?? ""}
@@ -300,17 +300,17 @@ function MeasurementsSection({ onLatestForActive }: { onLatestForActive: (m: { w
       <div className="relative z-10 mb-4 rounded-xl2 border border-dashed border-base-border bg-base-card/30 p-4">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
             <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <label className="mb-1 block text-xs text-gray-500">Date</label>
             <DatePicker value={draft.entryDate} onChange={(v) => setDraft({ ...draft, entryDate: v })} />
           </div>
           <div />
           {MEASUREMENT_FIELDS.map((f) => (
             <div key={String(f.key)}>
-              <label className="mb-1 block text-[11px] text-gray-500">{f.label} ({f.unit})</label>
+              <label className="mb-1 block text-xs text-gray-500">{f.label} ({f.unit})</label>
               <input
                 type="number"
                 value={(draft[f.key] as number | undefined) ?? ""}
@@ -389,15 +389,15 @@ function CycleLogRow({
       <div className="rounded-xl border border-accent-purple/40 bg-base-card/60 p-3 text-sm">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
             <MemberSelect members={members} value={entry.memberId} onChange={(id) => onUpdate({ ...entry, memberId: id })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <label className="mb-1 block text-xs text-gray-500">Date</label>
             <DatePicker value={entry.entryDate} onChange={(v) => onUpdate({ ...entry, entryDate: v })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Flow</label>
+            <label className="mb-1 block text-xs text-gray-500">Flow</label>
             <select
               value={entry.flow}
               onChange={(e) => onUpdate({ ...entry, flow: e.target.value as CycleFlow })}
@@ -409,7 +409,7 @@ function CycleLogRow({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Mood</label>
+            <label className="mb-1 block text-xs text-gray-500">Mood</label>
             <input
               value={entry.mood}
               onChange={(e) => onUpdate({ ...entry, mood: e.target.value })}
@@ -553,15 +553,15 @@ function CycleTrackerSection() {
       <div className="relative z-10 mb-4 rounded-xl2 border border-dashed border-base-border bg-base-card/30 p-4">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Household member</label>
+            <label className="mb-1 block text-xs text-gray-500">Household member</label>
             <MemberSelect members={members} value={draft.memberId} onChange={(id) => setDraft({ ...draft, memberId: id })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Date</label>
+            <label className="mb-1 block text-xs text-gray-500">Date</label>
             <DatePicker value={draft.entryDate} onChange={(v) => setDraft({ ...draft, entryDate: v })} />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Flow</label>
+            <label className="mb-1 block text-xs text-gray-500">Flow</label>
             <select
               value={draft.flow}
               onChange={(e) => setDraft({ ...draft, flow: e.target.value as CycleFlow })}
@@ -573,7 +573,7 @@ function CycleTrackerSection() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[11px] text-gray-500">Mood</label>
+            <label className="mb-1 block text-xs text-gray-500">Mood</label>
             <input
               value={draft.mood}
               onChange={(e) => setDraft({ ...draft, mood: e.target.value })}

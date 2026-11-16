@@ -1,5 +1,6 @@
 "use client";
 
+import BrandMark from "@/components/BrandMark";
 import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -17,12 +18,7 @@ export default function Sidebar() {
     <aside className="hidden md:flex w-64 shrink-0 flex-col justify-between border-r border-white/5 bg-white/[0.03] p-5 backdrop-blur-xl">
       <div>
         <div className="mb-8 flex items-center gap-2 px-2">
-          <div className="h-3 w-3 rounded-sm bg-accent-blue shadow-glow-blue" />
-          <div className="h-3 w-3 rounded-full bg-accent-pink shadow-glow-pink" />
-          <div
-            className="h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-accent-orange"
-            aria-hidden
-          />
+          <BrandMark size={44} />
         </div>
 
         <nav className="space-y-1">

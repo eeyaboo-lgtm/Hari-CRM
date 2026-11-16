@@ -110,7 +110,7 @@ export function UpcomingPaymentsCard() {
             <div className="flex items-center gap-2">
               <p className="text-sm text-gray-300">{formatMoney(p.amount, p.currency)}</p>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] ${
+                className={`rounded-full px-2 py-0.5 text-xs ${
                   p.days <= 3 ? "bg-red-500/20 text-red-400" : p.days <= 7 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"
                 }`}
               >

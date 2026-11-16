@@ -266,7 +266,7 @@ export default function CalendarPage() {
 
             <div className="relative z-10 grid grid-cols-7 px-4">
               {WEEKDAYS.map((w) => (
-                <div key={w} className="py-1.5 text-center text-[11px] uppercase tracking-wide text-gray-500">
+                <div key={w} className="py-1.5 text-center text-xs uppercase tracking-wide text-gray-500">
                   {w}
                 </div>
               ))}
@@ -303,13 +303,13 @@ export default function CalendarPage() {
                       {combined.slice(0, 2).map((ev, j) => (
                         <span
                           key={j}
-                          className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium ${CATEGORY_CLASSES[ev.kind].chip}`}
+                          className={`truncate rounded px-1.5 py-0.5 text-xs font-medium ${CATEGORY_CLASSES[ev.kind].chip}`}
                         >
                           {ev.label}
                         </span>
                       ))}
                       {combined.length > 2 && (
-                        <span className="pl-0.5 text-[10px] text-gray-500">+{combined.length - 2} more</span>
+                        <span className="pl-0.5 text-xs text-gray-500">+{combined.length - 2} more</span>
                       )}
                     </div>
                   </button>
@@ -317,7 +317,7 @@ export default function CalendarPage() {
               })}
             </div>
 
-            <div className="relative z-10 flex flex-wrap gap-4 px-4 pb-4 text-[11px] text-gray-400">
+            <div className="relative z-10 flex flex-wrap gap-4 px-4 pb-4 text-xs text-gray-400">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-accent-blue" /> Payments / bills
               </span>
@@ -346,7 +346,7 @@ export default function CalendarPage() {
                       <span className="h-2 w-2 shrink-0 rounded-full bg-accent-blue" />
                       <div>
                         <p className="text-gray-200">{p.title}</p>
-                        <p className="text-[11px] text-gray-500">Bill — from Finance</p>
+                        <p className="text-xs text-gray-500">Bill — from Finance</p>
                       </div>
                     </div>
                     <span className="text-gray-300">{p.amountLabel}</span>
@@ -358,13 +358,13 @@ export default function CalendarPage() {
                       <span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_CLASSES[e.category].dot}`} />
                       <div>
                         <p className="text-gray-200">{e.title}</p>
-                        <p className="text-[11px] text-gray-500">
+                        <p className="text-xs text-gray-500">
                           {e.eventTime || "All day"}
                           {e.location ? ` · ${e.location}` : ""}
                         </p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => removeEvent(e.id)} className="text-[11px] text-gray-500 hover:text-red-300">
+                    <button type="button" onClick={() => removeEvent(e.id)} className="text-xs text-gray-500 hover:text-red-300">
                       Remove
                     </button>
                   </div>
@@ -428,12 +428,12 @@ export default function CalendarPage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-white">Google Calendar sync</p>
-                  <span className="mt-0.5 inline-block rounded-full bg-accent-orange/15 px-2 py-0.5 text-[10px] text-accent-orange">
+                  <span className="mt-0.5 inline-block rounded-full bg-accent-orange/15 px-2 py-0.5 text-xs text-accent-orange">
                     Pending verification
                   </span>
                 </div>
               </div>
-              <p className="relative z-10 mb-3 text-[11px] leading-relaxed text-gray-500">
+              <p className="relative z-10 mb-3 text-xs leading-relaxed text-gray-500">
                 Two-way sync will pull your Google events in and push appointments out automatically. It's wired up
                 but locked until the app has a verified domain and passes Google's OAuth review.
               </p>
@@ -456,14 +456,14 @@ export default function CalendarPage() {
                       <span className="h-2 w-2 shrink-0 rounded-full bg-accent-blue" />
                       <div>
                         <p className="text-gray-200">{p.title}</p>
-                        <p className="text-[11px] text-gray-500">{p.dateLabel}</p>
+                        <p className="text-xs text-gray-500">{p.dateLabel}</p>
                       </div>
                     </div>
                     <span className="text-gray-300">{p.amountLabel}</span>
                   </div>
                 ))}
               </div>
-              <p className="relative z-10 mt-3 text-[11px] text-gray-500">
+              <p className="relative z-10 mt-3 text-xs text-gray-500">
                 Add or edit bills in <Link href="/finance" className="text-accent-blue hover:underline">Finance</Link> — they show
                 up here automatically.
               </p>

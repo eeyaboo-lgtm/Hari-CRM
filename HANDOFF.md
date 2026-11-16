@@ -4,6 +4,67 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
+## 2026-11-16 — theme system rewrite + Glass/Clean toggle (Claude Fable) — READ FIRST
+
+**Done, UNCOMMITTED + UNPUSHED. `tsc --noEmit` clean and `next build` passes (built in a
+scratch copy). NOT visually checked in a browser — Coco must eyeball both themes x both styles.**
+- `tailwind.config.ts`: white / black / gray-100..600 / base-* now resolve to CSS variables.
+  "white" means "foreground ink for this theme", NOT literal #fff. Need literal white? add the
+  `keep-white` class (used on the 2FA QR code; `.dp-select` does the same).
+- `app/globals.css`: all tokens live here. `data-theme="light"` flips colours;
+  `data-style="clean"` turns off blur / sheen / glows (absent = Glass, the original look).
+  The old ~25 `!important` light-mode overrides are GONE — do not re-add per-class overrides,
+  change the variable instead. Light-mode accent/red TEXT has darker shades (fills unchanged).
+- `components/ThemeToggle.tsx`: now Theme + Style segmented controls (Settings > Appearance).
+  localStorage keys: `theme`, `uiStyle`. `app/layout.tsx` applies both before paint.
+- `components/InfoTip.tsx`: reusable hover/tap/focus tip (portal, so glass cards cannot clip it).
+  Only used in Appearance so far. NEXT: add one-sentence tips to options in Settings, Finance
+  (visibility, tenure, cadence), Health. Keep each under 15 words.
+- `components/BrandMark.tsx`: logo A ("refined trio") everywhere; `public/brand-mark.svg`,
+  `app/icon.png`, `app/apple-icon.png`, `app/favicon.ico` regenerated.
+- Mobile: 55 uses of 9-11px text raised to `text-xs`; inputs 16px on phones (stops iOS zoom);
+  lighter blur on phones; safe-area padding; reduced-motion respected; `viewport` export added.
+- Chart hex colours in `SnapshotChart.tsx` / `FinanceDeepView.tsx` now use the variables.
+- Dark `gray-500` lifted (#6b7280 -> #8b90a0): old value failed contrast on cards (3.3:1).
+
+**Name "Hari": NOT cleared.** An iOS app "Hari - Plant Watering Reminder" (Covelo Tech, Jan 2026,
+with "Hari Pro" subscription) exists; hari.app and hari.com are taken. No registry search done.
+Fine as an internal name; do an official trademark search before any public launch.
+
+**Design preview (approved look):** https://claude.ai/artifact/AoLjmrDdtbiqoc2ydw9nHa
+
+Order to ship: commit + push everything -> watch Render build -> check Settings > Appearance in
+all four combinations on desktop and phone -> then the 2026-11-15 security steps below.
+
+---
+
+## 2026-11-15 — review session (Claude Fable) — READ FIRST, supersedes nothing below
+
+**Done, UNCOMMITTED + UNPUSHED (Coco must commit/push; sandbox push is blocked):**
+- Fixed pre-load data-loss bug: an edit made before the initial Supabase fetch resolved
+  replaced server rows with "stale cache + edit", deleting rows added on another device.
+  New `lib/supabase/mergePreReady.ts` (3-way merge, cache = base) wired into
+  `useSupabaseSynced.ts` and `useSchemesSynced.ts`. Helper unit-tested 7/7 in isolation.
+  NOT typechecked (no node_modules in sandbox) — watch the Render build after push.
+
+**Remaining, fine for Opus/Sonnet, in order:**
+1. Bump `next` 14.2.15 -> latest 14.2.x, run `npm audit`, push, confirm deploy live.
+2. Supabase (project `pfchzkcteymiigsdokeo`): revoke `anon` EXECUTE on the 5 SECURITY DEFINER
+   functions the security advisor lists (`admin_household_ok`, `admin_household_ok_direct`,
+   `check_login_allowed`, `prevent_direct_household_change`, `redeem_household_invite`) —
+   first check each is not needed pre-login (`check_login_allowed` is called via service role
+   in `app/login/actions.ts`, so anon should not need it). Enable leaked-password protection
+   in Dashboard -> Auth.
+3. 2FA is enforced only in `middleware.ts`; no RLS policy checks `aal2`. Add a restrictive
+   policy for users with an enrolled factor. Trace consequences first (see AGENTS rules).
+4. Outer `Hari-CRM/` folder is a stale copy (8.8k lines vs 13.7k here) with its own
+   `.env.local` — move its code into `_to_delete/` so no tool edits the wrong tree.
+5. Low priority: split `app/finance/page.tsx` (1,655 lines), CSP nonce, 41 `any`s.
+
+Live RLS verified household-scoped this session (119 policies, `admin_household_ok`).
+
+---
+
 Last touched: 2026-08-26, session #30, by Claude Cowork — fixed a Render build break, then
 found and fixed a SECOND independent cross-household leak (localStorage caching, not RLS), and
 confirmed the allergy-save fix from earlier today actually holds. **Coco pushed and confirmed

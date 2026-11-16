@@ -17,15 +17,15 @@ export default function SnapshotChart({ data }: { data: SnapshotPoint[] }) {
       <LineChart data={data}>
         <XAxis
           dataKey="month"
-          stroke="#6b7280"
+          stroke="rgb(var(--c-gray-500))"
           tickLine={false}
           axisLine={false}
           fontSize={12}
         />
         <Tooltip
           contentStyle={{
-            background: "#20222e",
-            border: "1px solid #2a2d3a",
+            background: "rgb(var(--c-card))",
+            border: "1px solid rgb(var(--c-border))",
             borderRadius: 12,
             fontSize: 12,
           }}
@@ -33,7 +33,7 @@ export default function SnapshotChart({ data }: { data: SnapshotPoint[] }) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#f9fafb"
+          stroke="rgb(var(--c-white))"
           strokeWidth={2}
           dot={false}
         />

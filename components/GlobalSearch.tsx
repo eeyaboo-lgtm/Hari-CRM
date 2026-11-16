@@ -115,7 +115,7 @@ export default function GlobalSearch() {
       >
         <Search size={14} />
         Search
-        <span className="hidden rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-gray-400 sm:inline">⌘K</span>
+        <span className="hidden rounded bg-white/10 px-1.5 py-0.5 font-mono text-xs text-gray-400 sm:inline">⌘K</span>
       </button>
     );
   }
@@ -157,7 +157,7 @@ export default function GlobalSearch() {
                 {r.title}
                 {r.subtitle && <span className="ml-2 text-xs text-gray-500">{r.subtitle}</span>}
               </span>
-              <span className={`text-[10px] uppercase tracking-wide ${r.color}`}>{r.module}</span>
+              <span className={`text-xs uppercase tracking-wide ${r.color}`}>{r.module}</span>
             </button>
           ))}
         </div>

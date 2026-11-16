@@ -1,5 +1,6 @@
 "use client";
 
+import BrandMark from "@/components/BrandMark";
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -84,8 +85,7 @@ export default function SignupPage() {
     <div className="flex min-h-screen items-center justify-center bg-base-bg px-4 py-10">
       <div className="w-full max-w-sm rounded-xl2 bg-base-panel p-8">
         <div className="mb-6 flex items-center gap-2">
-          <div className="h-3 w-3 rounded-sm bg-accent-blue" />
-          <div className="h-3 w-3 rounded-full bg-accent-pink" />
+          <BrandMark size={44} />
         </div>
         <h1 className="text-xl font-semibold text-white">Create your household</h1>
         <p className="mt-1 text-sm text-gray-400">Start your own Hari-CRM household dashboard.</p>

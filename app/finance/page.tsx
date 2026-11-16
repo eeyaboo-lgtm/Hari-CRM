@@ -404,7 +404,7 @@ export default function FinancePage() {
   // placeholder text.
   const Field = ({ label, children, dark, hint }: { label: string; children: React.ReactNode; dark?: boolean; hint?: string }) => (
     <label className="flex flex-col gap-0.5">
-      <span className={`flex items-center gap-1 text-[9px] font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>
+      <span className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>
         {label}
         {hint && (
           <span
@@ -757,7 +757,7 @@ export default function FinancePage() {
                   <p className="text-gray-200">{p.label}</p>
                   <div className="flex items-center gap-2">
                     <p className="text-gray-300">{formatMoney(p.amount, p.currency)}</p>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${p.days <= 3 ? "bg-red-500/20 text-red-400" : p.days <= 7 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${p.days <= 3 ? "bg-red-500/20 text-red-400" : p.days <= 7 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"}`}>
                       {formatDaysUntil(p.days)}
                     </span>
                   </div>
@@ -1132,7 +1132,7 @@ export default function FinancePage() {
                               <input type="checkbox" checked={it.paid} onChange={() => toggleItemPaid(sc.id, it.id)} title="Mark paid" />
                             )}
                             <span className={it.paid ? "text-gray-500 line-through" : "text-gray-300"}>{it.label}</span>
-                            <span className="rounded-full bg-base-card px-1.5 py-0.5 text-[10px] text-gray-500">{it.cadence}</span>
+                            <span className="rounded-full bg-base-card px-1.5 py-0.5 text-xs text-gray-500">{it.cadence}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-gray-300">{formatMoney(it.amount, sc.currency)}</span>
@@ -1234,7 +1234,7 @@ export default function FinancePage() {
                     <p className="flex items-center gap-1.5 text-gray-200">
                       {s.provider}
                       {overrideActive && (
-                        <span className="rounded-full bg-accent-orange/20 px-2 py-0.5 text-[10px] text-accent-orange" title={`Temporary override until ${s.effectiveUntil}`}>
+                        <span className="rounded-full bg-accent-orange/20 px-2 py-0.5 text-xs text-accent-orange" title={`Temporary override until ${s.effectiveUntil}`}>
                           elevated until {s.effectiveUntil}
                         </span>
                       )}
@@ -1331,7 +1331,7 @@ export default function FinancePage() {
                   <div>
                     <p className="flex items-center gap-1.5 text-gray-200">
                       {i.source}
-                      {i.isRecurring && <span className="rounded-full bg-accent-green/20 px-2 py-0.5 text-[10px] text-accent-green">recurring · {i.cadence}</span>}
+                      {i.isRecurring && <span className="rounded-full bg-accent-green/20 px-2 py-0.5 text-xs text-accent-green">recurring · {i.cadence}</span>}
                     </p>
                     <p className="text-xs text-gray-500">{i.incomeType} · {ownerName(i.ownerId)} · received {i.receivedDate}</p>
                     {i.notes && <p className="mt-0.5 text-xs italic text-gray-500">{i.notes}</p>}
@@ -1430,7 +1430,7 @@ export default function FinancePage() {
                 <div>
                   <p className="flex items-center gap-1.5 text-sm text-gray-200">
                     {savingsGoal.myGoal.label}
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] ${savingsGoal.myGoal.visibility === "shared_view" ? "bg-accent-blue/20 text-accent-blue" : "bg-white/10 text-gray-400"}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs ${savingsGoal.myGoal.visibility === "shared_view" ? "bg-accent-blue/20 text-accent-blue" : "bg-white/10 text-gray-400"}`}>
                       {savingsGoal.myGoal.visibility === "shared_view" ? "shared with household" : "private"}
                     </span>
                   </p>
@@ -1571,11 +1571,11 @@ export default function FinancePage() {
                   <div>
                     <p className="flex items-center gap-1.5 text-gray-200">
                       {e.label}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${typeBadgeCls}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${typeBadgeCls}`}>
                         {e.expenseType === "monthly" ? "monthly" : e.expenseType === "fixed_term" ? "fixed-term" : "one-off"}
                       </span>
-                      {e.isEstimated && <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-gray-400">estimated</span>}
-                      {e.paid && <span className="rounded-full bg-accent-green/20 px-2 py-0.5 text-[10px] text-accent-green">paid</span>}
+                      {e.isEstimated && <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-gray-400">estimated</span>}
+                      {e.paid && <span className="rounded-full bg-accent-green/20 px-2 py-0.5 text-xs text-accent-green">paid</span>}
                     </p>
                     <p className="text-xs text-gray-500">
                       {e.category || "Uncategorized"} · {ownerName(e.ownerId)}

@@ -17,6 +17,7 @@
 // touching it — GoogleSignInButton and /auth/callback already support an
 // arbitrary `next` path, so `next=/join?code=X&auto=1` round-trips for free.
 
+import BrandMark from "@/components/BrandMark";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -130,8 +131,7 @@ export default function JoinHouseholdPage() {
     <div className="flex min-h-screen items-center justify-center bg-base-bg px-4 py-10">
       <div className="w-full max-w-sm rounded-xl2 bg-base-panel p-8">
         <div className="mb-6 flex items-center gap-2">
-          <div className="h-3 w-3 rounded-sm bg-accent-blue" />
-          <div className="h-3 w-3 rounded-full bg-accent-pink" />
+          <BrandMark size={44} />
         </div>
         <h1 className="text-xl font-semibold text-white">Join a household</h1>
         <p className="mt-1 text-sm text-gray-400">

@@ -1,3 +1,4 @@
+import BrandMark from "@/components/BrandMark";
 import Link from "next/link";
 import { login } from "./actions";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
@@ -21,8 +22,7 @@ export default function LoginPage({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-base-bg px-4 py-10">
       <div className="w-full max-w-sm rounded-xl2 bg-base-panel p-8">
         <div className="mb-6 flex items-center gap-2">
-          <div className="h-3 w-3 rounded-sm bg-accent-blue" />
-          <div className="h-3 w-3 rounded-full bg-accent-pink" />
+          <BrandMark size={44} />
         </div>
         <h1 className="text-xl font-semibold text-white">Welcome back</h1>
         <p className="mt-1 text-sm text-gray-400">Sign in to the household dashboard.</p>

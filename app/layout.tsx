@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { HouseholdProvider } from "@/lib/HouseholdContext";
 import ProfileGate from "@/components/ProfileGate";
@@ -14,6 +14,14 @@ export const metadata: Metadata = {
   description: "A private, walled-off life dashboard per household — health, finance, business & vision.",
 };
 
+// viewportFit "cover" lets the page use the full screen on notched phones;
+// globals.css pads the bottom by the safe-area inset.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 // Applied before paint so switching to light mode on a previous visit
 // doesn't flash dark on reload.
 const THEME_INIT_SCRIPT = `
@@ -21,6 +29,8 @@ const THEME_INIT_SCRIPT = `
   try {
     var t = localStorage.getItem('theme');
     if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    var s = localStorage.getItem('uiStyle');
+    if (s === 'clean') document.documentElement.setAttribute('data-style', 'clean');
   } catch (e) {}
 })();
 `;

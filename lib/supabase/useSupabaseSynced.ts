@@ -61,6 +61,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getOwnerMap } from "@/lib/supabase/ownerMap";
+import { mergePreReadyEdit } from "@/lib/supabase/mergePreReady";
 import { beginWrite, clearError, reportError } from "@/lib/supabase/syncStatus";
 
 type Mapper<T> = {
@@ -260,7 +261,12 @@ export function useSupabaseSynced<T extends { id: string }>(
         // supersedes `rows` rather than needing to be merged with it.
         const pendingWrite = pendingWriteRef.current;
         pendingWriteRef.current = null;
-        const finalRows = pendingWrite ?? rows;
+        // 2026-11-15: merge instead of superseding — the pre-ready edit was
+        // built off the stale cache, so replacing `rows` with it deleted
+        // anything added on another device. See mergePreReady.ts.
+        const finalRows = pendingWrite
+          ? mergePreReadyEdit(cachedRows, pendingWrite, serverRows, pendingIds)
+          : rows;
 
         setValueState(finalRows);
         try {
@@ -271,7 +277,7 @@ export function useSupabaseSynced<T extends { id: string }>(
 
         if (pendingWrite) {
           console.warn(`[useSupabaseSynced:${table}] syncing edit(s) made before initial load finished`);
-          queueSync(pendingWrite);
+          queueSync(finalRows);
         } else if (recovered.length > 0) {
           console.warn(`[useSupabaseSynced:${table}] recovered ${recovered.length} unsaved item(s) from a previous session, retrying save`);
           queueSync(rows);

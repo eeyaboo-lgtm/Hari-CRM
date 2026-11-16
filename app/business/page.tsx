@@ -256,7 +256,7 @@ export default function BusinessPage() {
               return (
                 <div key={p.id} className="glass-card space-y-2 rounded-xl2 border border-accent-purple/40 p-4">
                   <div>
-                    <label className="mb-1 block text-[11px] text-gray-500">Name</label>
+                    <label className="mb-1 block text-xs text-gray-500">Name</label>
                     <input
                       value={projectDraft.name}
                       onChange={(e) => setProjectDraft({ ...projectDraft, name: e.target.value })}
@@ -264,7 +264,7 @@ export default function BusinessPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] text-gray-500">Type</label>
+                    <label className="mb-1 block text-xs text-gray-500">Type</label>
                     <input
                       value={projectDraft.projectType}
                       onChange={(e) => setProjectDraft({ ...projectDraft, projectType: e.target.value })}
@@ -273,7 +273,7 @@ export default function BusinessPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] text-gray-500">URL</label>
+                    <label className="mb-1 block text-xs text-gray-500">URL</label>
                     <input
                       value={projectDraft.url}
                       onChange={(e) => setProjectDraft({ ...projectDraft, url: e.target.value })}
@@ -281,7 +281,7 @@ export default function BusinessPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] text-gray-500">Description</label>
+                    <label className="mb-1 block text-xs text-gray-500">Description</label>
                     <textarea
                       value={projectDraft.notes}
                       onChange={(e) => setProjectDraft({ ...projectDraft, notes: e.target.value.slice(0, NOTES_MAX_LEN) })}
@@ -291,7 +291,7 @@ export default function BusinessPage() {
                       className="w-full resize-none rounded-lg border border-base-border bg-base-card px-2.5 py-1.5 text-xs text-gray-100 outline-none focus:border-accent-purple"
                     />
                   </div>
-                  <p className="text-right text-[10px] text-gray-500">{projectDraft.notes.length}/{NOTES_MAX_LEN}</p>
+                  <p className="text-right text-xs text-gray-500">{projectDraft.notes.length}/{NOTES_MAX_LEN}</p>
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-1.5 text-xs text-gray-400">
                       <input type="checkbox" checked={projectDraft.pinnedDashboard} onChange={(e) => setProjectDraft({ ...projectDraft, pinnedDashboard: e.target.checked })} />
@@ -320,7 +320,7 @@ export default function BusinessPage() {
                   <button type="button" onClick={() => removeProject(p.id)} className="text-gray-500 hover:text-red-400"><X size={14} /></button>
                 </div>
                 {p.pinnedDashboard && (
-                  <span className="absolute left-3 top-3 z-20 rounded-full bg-accent-green/20 px-2 py-0.5 text-[9px] uppercase tracking-wide text-accent-green">
+                  <span className="absolute left-3 top-3 z-20 rounded-full bg-accent-green/20 px-2 py-0.5 text-xs uppercase tracking-wide text-accent-green">
                     On dashboard
                   </span>
                 )}
@@ -341,7 +341,7 @@ export default function BusinessPage() {
               </div>
             )}
             <div>
-              <label className="mb-1 block text-[11px] text-gray-500">Name</label>
+              <label className="mb-1 block text-xs text-gray-500">Name</label>
               <input
                 value={newProject.name}
                 onChange={(e) => setNewProject((s) => ({ ...s, name: e.target.value }))}
@@ -350,7 +350,7 @@ export default function BusinessPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] text-gray-500">Type</label>
+              <label className="mb-1 block text-xs text-gray-500">Type</label>
               <input
                 value={newProject.projectType}
                 onChange={(e) => setNewProject((s) => ({ ...s, projectType: e.target.value }))}
@@ -359,7 +359,7 @@ export default function BusinessPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] text-gray-500">URL</label>
+              <label className="mb-1 block text-xs text-gray-500">URL</label>
               <input
                 value={newProject.url}
                 onChange={(e) => setNewProject((s) => ({ ...s, url: e.target.value }))}
@@ -367,7 +367,7 @@ export default function BusinessPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] text-gray-500">Description</label>
+              <label className="mb-1 block text-xs text-gray-500">Description</label>
               <textarea
                 value={newProject.notes}
                 onChange={(e) => setNewProject((s) => ({ ...s, notes: e.target.value.slice(0, NOTES_MAX_LEN) }))}

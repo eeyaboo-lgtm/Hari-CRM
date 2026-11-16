@@ -253,7 +253,7 @@ const GOOGLE_CHECKLIST = [
 function ScoreTile({ s }: { s: Score }) {
   return (
     <div className="glass-card rounded-xl2 p-4">
-      <p className="relative z-10 text-[11px] uppercase tracking-wide text-gray-500">{s.label}</p>
+      <p className="relative z-10 text-xs uppercase tracking-wide text-gray-500">{s.label}</p>
       <span
         className={`relative z-10 mt-1.5 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium ${TONE_CLASSES[s.tone]}`}
       >
@@ -331,7 +331,7 @@ export default function StrategyPage() {
           <div className="flex items-center gap-2">
             <Rocket size={20} className="text-accent-purple" />
             <h1 className="text-2xl font-semibold text-white">Strategy Memo</h1>
-            <span className="rounded-full border border-accent-orange/30 bg-accent-orange/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-accent-orange">
+            <span className="rounded-full border border-accent-orange/30 bg-accent-orange/10 px-2 py-0.5 text-xs uppercase tracking-wide text-accent-orange">
               Admin only
             </span>
           </div>

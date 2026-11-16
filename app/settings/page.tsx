@@ -474,7 +474,7 @@ export default function SettingsPage() {
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 font-medium text-white">Appearance</h2>
           <p className="relative z-10 mb-4 text-sm text-gray-400">
-            Switch between dark and light mode. Saved on this device.
+            Pick a theme and a style. Saved on this device.
           </p>
           <div className="relative z-10">
             <ThemeToggle />

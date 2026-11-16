@@ -22,11 +22,11 @@ import type { MonthlyProjectionPoint, BudgetStatus } from "@/lib/financeUtils";
 import { COLORS, STATUS_HEX } from "@/lib/financeUtils";
 
 const tooltipStyle = {
-  background: "#20222e",
-  border: "1px solid #2a2d3a",
+  background: "rgb(var(--c-card))",
+  border: "1px solid rgb(var(--c-border))",
   borderRadius: 12,
   fontSize: 12,
-  color: "#e5e7eb",
+  color: "rgb(var(--c-gray-200))",
 };
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
@@ -49,7 +49,7 @@ function BudgetGauge({ ratioPct, status, label }: { ratioPct: number; status: Bu
   return (
     <div className="flex flex-col items-center">
       <svg width="180" height="100" viewBox="0 0 180 100">
-        <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#2a2d3a" strokeWidth="14" strokeLinecap="round" />
+        <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="rgb(var(--c-border))" strokeWidth="14" strokeLinecap="round" />
         <path
           d="M 20 90 A 70 70 0 0 1 160 90"
           fill="none"
@@ -82,9 +82,9 @@ export function CashFlowChart({ data }: { data: MonthlyProjectionPoint[] }) {
                 <stop offset="95%" stopColor={COLORS.purple} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2a2d3a" vertical={false} />
-            <XAxis dataKey="month" stroke="#6b7280" tickLine={false} axisLine={false} fontSize={12} />
-            <YAxis stroke="#6b7280" tickLine={false} axisLine={false} fontSize={12} width={40} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--c-border))" vertical={false} />
+            <XAxis dataKey="month" stroke="rgb(var(--c-gray-500))" tickLine={false} axisLine={false} fontSize={12} />
+            <YAxis stroke="rgb(var(--c-gray-500))" tickLine={false} axisLine={false} fontSize={12} width={40} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => Math.round(v).toLocaleString()} />
             <Area type="monotone" dataKey="total" stroke={COLORS.purple} strokeWidth={2} fill="url(#cashflowFill)" />
           </AreaChart>
@@ -178,7 +178,7 @@ export function CurrencyBalancesBars({ totals, hideBalances }: { totals: Record<
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={data} layout="vertical" margin={{ left: 8 }}>
             <XAxis type="number" hide />
-            <YAxis dataKey="currency" type="category" stroke="#9ca3af" tickLine={false} axisLine={false} fontSize={13} width={44} />
+            <YAxis dataKey="currency" type="category" stroke="rgb(var(--c-gray-400))" tickLine={false} axisLine={false} fontSize={13} width={44} />
             <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => v.toLocaleString()} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Bar dataKey="value" radius={[0, 8, 8, 0]} fill={COLORS.blue} barSize={22} />
           </BarChart>

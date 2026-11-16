@@ -144,7 +144,7 @@ export default function AdminHouseholdOverview() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-white">{h.householdName}</p>
-                  <p className="mt-0.5 text-[11px] text-gray-500">
+                  <p className="mt-0.5 text-xs text-gray-500">
                     {h.memberCount} member{h.memberCount !== 1 ? "s" : ""}
                     {h.ownerName ? ` · head: ${h.ownerName}` : ""} · last active {timeAgo(h.lastActiveAt)}
                   </p>

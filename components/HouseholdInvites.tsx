@@ -135,7 +135,7 @@ export default function HouseholdInvites({ householdId }: { householdId: string 
                 >
                   <div>
                     <span className="font-mono text-sm tracking-widest text-white">{inv.code}</span>
-                    <p className="mt-0.5 text-[11px] text-gray-500">Not yet used</p>
+                    <p className="mt-0.5 text-xs text-gray-500">Not yet used</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -165,12 +165,12 @@ export default function HouseholdInvites({ householdId }: { householdId: string 
 
           {!loading && usedOrRevoked.length > 0 && (
             <details className="relative z-10 mt-4">
-              <summary className="cursor-pointer text-[11px] text-gray-600 hover:text-gray-400">
+              <summary className="cursor-pointer text-xs text-gray-600 hover:text-gray-400">
                 {usedOrRevoked.length} used / revoked code{usedOrRevoked.length !== 1 ? "s" : ""}
               </summary>
               <div className="mt-2 space-y-1">
                 {usedOrRevoked.map((inv) => (
-                  <div key={inv.id} className="flex items-center justify-between text-[11px] text-gray-600">
+                  <div key={inv.id} className="flex items-center justify-between text-xs text-gray-600">
                     <span className="font-mono">{inv.code}</span>
                     <span>{inv.revoked ? "Revoked" : "Used"}</span>
                   </div>

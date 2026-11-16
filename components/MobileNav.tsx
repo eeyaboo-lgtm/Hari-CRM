@@ -18,6 +18,7 @@
 // once a household/profile is actually unlocked — same treatment as
 // GlobalSearch).
 
+import BrandMark from "@/components/BrandMark";
 import { useEffect, useState } from "react";
 import { Menu, X, LogOut } from "lucide-react";
 import Link from "next/link";
@@ -75,12 +76,7 @@ export default function MobileNav() {
             <div>
               <div className="mb-6 flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                  <div className="h-3 w-3 rounded-sm bg-accent-blue shadow-glow-blue" />
-                  <div className="h-3 w-3 rounded-full bg-accent-pink shadow-glow-pink" />
-                  <div
-                    className="h-0 w-0 border-y-[6px] border-l-[10px] border-y-transparent border-l-accent-orange"
-                    aria-hidden
-                  />
+                  <BrandMark size={44} />
                 </div>
                 <button
                   type="button"

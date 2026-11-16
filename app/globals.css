@@ -2,30 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ====================================================================== */
+/* THEME TOKENS (rewritten 2026-11-16)                                     */
+/* Two independent switches on <html>:                                     */
+/*   data-theme = "light"   (absent = dark)   -> colours                   */
+/*   data-style = "clean"   (absent = glass)  -> blur / glow / sheen       */
+/* tailwind.config.ts maps white, black, gray and base colours onto these variables, */
+/* so pages need no theme-specific classes and no !important overrides.    */
+/* Values are space-separated RGB so Tailwind opacity (bg-white/5) works.  */
+/* ====================================================================== */
+:root {
+  color-scheme: dark;
+  --c-white: 255 255 255;
+  --c-black: 0 0 0;
+  --c-gray-100: 243 244 246;
+  --c-gray-200: 229 231 235;
+  --c-gray-300: 209 213 219;
+  --c-gray-400: 156 163 175;
+  --c-gray-500: 139 144 160; /* lifted from Tailwind's #6b7280 for readability */
+  --c-gray-600: 75 85 99;
+  --c-bg: 21 22 28;
+  --c-panel: 27 29 38;
+  --c-card: 32 34 46;
+  --c-border: 42 45 58;
+  --c-border-default: 229 231 235;
+  --c-surface: 32 34 46; /* flat card fill used by the Clean style */
+
+  --page-bg: radial-gradient(circle at 18% -10%, #2c2f52 0%, #191a2b 42%, #0b0c13 100%);
+  --glass-bg: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+  --sheen-a: rgba(255,255,255,0.32);
+  --sheen-b: rgba(255,255,255,0.22);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --c-white: 28 30 43;
+  --c-black: 20 20 45;
+  --c-gray-100: 35 37 58;
+  --c-gray-200: 43 45 66;
+  --c-gray-300: 60 63 88;
+  --c-gray-400: 88 92 117;
+  --c-gray-500: 100 104 128;
+  --c-gray-600: 140 144 165;
+  --c-bg: 245 246 251;
+  --c-panel: 255 255 255;
+  --c-card: 238 240 248;
+  --c-border: 226 228 241;
+  --c-border-default: 226 228 241;
+  --c-surface: 255 255 255;
+
+  --page-bg: radial-gradient(circle at 18% -10%, #eef0ff 0%, #f5f6fb 45%, #ffffff 100%);
+  --glass-bg: linear-gradient(180deg, rgba(20,20,45,0.045), rgba(20,20,45,0.015));
+  --glass-border: rgba(20,20,45,0.09);
+  --glass-shadow: 0 8px 28px rgba(30,30,70,0.08), inset 0 1px 0 rgba(255,255,255,0.7);
+  --sheen-a: rgba(255,255,255,0.55);
+  --sheen-b: rgba(255,255,255,0.22);
+}
+
+/* Clean style: flat page, solid cards, no blur. Works with either theme. */
+[data-style="clean"] {
+  --page-bg: rgb(var(--c-bg));
+  --glass-bg: rgb(var(--c-surface));
+  --glass-border: rgb(var(--c-border));
+}
+[data-style="clean"]:not([data-theme="light"]) { --glass-shadow: 0 6px 20px rgba(0,0,0,0.28); }
+[data-style="clean"][data-theme="light"] { --glass-shadow: 0 6px 20px rgba(30,30,70,0.07); }
+
 html, body {
   min-height: 100%;
   /* Guards against a stray few-pixel horizontal overflow (rounding in a
      flex/grid row, a fixed-width control in a narrow card) turning into a
-     visible strip of whichever background is underneath on the right edge
-     on mobile — reported as a "vertical black bar." Every intentional
-     horizontally-scrolling element in the app scrolls independently inside
-     its own container, so this doesn't affect any of them. */
+     visible strip on the right edge on mobile — reported as a "vertical
+     black bar." Intentional horizontal scrollers scroll inside their own
+     containers, so this doesn't affect them. */
   overflow-x: hidden;
-  background: radial-gradient(circle at 18% -10%, #2c2f52 0%, #191a2b 42%, #0b0c13 100%);
+  background: var(--page-bg);
   background-attachment: fixed;
-  color: #e5e7eb;
+  color: rgb(var(--c-gray-200));
 }
 
 @layer components {
-  /* Frosted glass panel — used for dark cards */
+  /* Card surface. Frosted glass in the Glass style, solid in Clean. */
   .glass-card {
     position: relative;
     overflow: hidden;
-    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02));
+    background: var(--glass-bg);
     -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
   }
 
   /* Glossy sheen for saturated gradient cards (quick launch, active nav, hero) */
@@ -37,7 +104,7 @@ html, body {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 45%);
+    background: linear-gradient(135deg, var(--sheen-a) 0%, rgba(255,255,255,0) 45%);
     pointer-events: none;
   }
   .glossy-gradient::after {
@@ -47,59 +114,65 @@ html, body {
     right: -25%;
     width: 65%;
     height: 130%;
-    background: radial-gradient(circle, rgba(255,255,255,0.22), rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, var(--sheen-b), rgba(255,255,255,0) 70%);
     pointer-events: none;
   }
+
+  /* Logo: soft glow in Glass, none in Clean. */
+  .brand-mark { filter: drop-shadow(0 2px 6px rgba(139,124,249,0.45)); }
 }
 
-/* ---------------------------------------------------------------------- */
-/* Light mode — overrides the fixed dark-palette utility classes used     */
-/* throughout the app, driven by data-theme="light" on <html>.            */
-/* ---------------------------------------------------------------------- */
-[data-theme="light"] {
-  color-scheme: light;
+/* ---- Clean style switches the effects off ---- */
+[data-style="clean"] .glass-card {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
-[data-theme="light"] html,
-[data-theme="light"] body {
-  background: radial-gradient(circle at 18% -10%, #eef0ff 0%, #f5f6fb 45%, #ffffff 100%);
-  background-attachment: fixed;
-  color: #20222f;
+[data-style="clean"] .glossy-gradient::before,
+[data-style="clean"] .glossy-gradient::after { display: none; }
+[data-style="clean"] .shadow-glow-purple,
+[data-style="clean"] .shadow-glow-pink,
+[data-style="clean"] .shadow-glow-blue { box-shadow: none; }
+[data-style="clean"] .brand-mark { filter: none; }
+
+/* ---- Literal white, regardless of theme ----
+   DatePicker's selects sit on a fixed navy fill; the 2FA QR code needs a
+   real white quiet zone. Re-scoping the variable keeps their existing
+   `text-white` / `bg-white` classes meaning literal white. */
+.dp-select,
+.keep-white { --c-white: 255 255 255; }
+
+/* ---- Light theme: accent + red TEXT needs darker shades to stay readable
+   on a light surface (fills keep the bright palette). Attribute + class
+   out-specifies the single-class utilities, so no !important. ---- */
+[data-theme="light"] .text-accent-purple { color: #5b48d6; }
+[data-theme="light"] .text-accent-blue { color: #0b6a9c; }
+[data-theme="light"] .text-accent-green { color: #0c7449; }
+[data-theme="light"] .text-accent-orange { color: #9a4d00; }
+[data-theme="light"] .text-accent-pink { color: #b3206a; }
+[data-theme="light"] .text-red-300,
+[data-theme="light"] .text-red-400,
+[data-theme="light"] .hover\:text-red-300:hover,
+[data-theme="light"] .hover\:text-red-400:hover { color: #b91c1c; }
+
+/* ---- Mobile ---- */
+@media (max-width: 767px) {
+  /* iOS Safari zooms the page when a focused field's text is under 16px. */
+  input, select, textarea { font-size: 16px !important; }
+  /* Lighter blur: 20px backdrop blur on many cards janks on phones. */
+  .glass-card {
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  [data-style="clean"] .glass-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body { padding-bottom: env(safe-area-inset-bottom); }
 }
-[data-theme="light"] .glass-card {
-  background: linear-gradient(180deg, rgba(20, 20, 45, 0.045), rgba(20, 20, 45, 0.015));
-  border-color: rgba(20, 20, 45, 0.09);
-  box-shadow: 0 8px 28px rgba(30, 30, 70, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-[data-theme="light"] .glossy-gradient::before {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 45%);
-}
-[data-theme="light"] .bg-base-bg { background-color: #f5f6fb !important; }
-[data-theme="light"] .bg-base-panel { background-color: #ffffff !important; }
-[data-theme="light"] .bg-base-card,
-[data-theme="light"] .bg-base-card\/60 { background-color: #eef0f8 !important; }
-[data-theme="light"] .border-base-border { border-color: #e2e4f1 !important; }
-[data-theme="light"] .text-white { color: #1c1e2b !important; }
-/* DatePicker's Day/Month/Year controls (components/DatePicker.tsx) keep a
-   fixed dark-navy background in BOTH themes on purpose, so the rule above
-   must not touch their text — it would otherwise turn "white text on navy"
-   into "navy text on navy" the moment light mode is on. Higher specificity
-   (two classes) wins over the single-class rule above regardless of source
-   order. */
-[data-theme="light"] .dp-select.text-white { color: #ffffff !important; }
-[data-theme="light"] .text-gray-100 { color: #23253a !important; }
-[data-theme="light"] .text-gray-200 { color: #2b2d42 !important; }
-[data-theme="light"] .text-gray-300 { color: #3c3f58 !important; }
-[data-theme="light"] .text-gray-400 { color: #62667f !important; }
-[data-theme="light"] .text-gray-500 { color: #7d8099 !important; }
-[data-theme="light"] .placeholder\:text-gray-500::placeholder { color: #a3a6ba !important; }
-[data-theme="light"] .border-white\/5 { border-color: rgba(20, 20, 45, 0.08) !important; }
-[data-theme="light"] .border-white\/10 { border-color: rgba(20, 20, 45, 0.1) !important; }
-[data-theme="light"] .bg-white\/\[0\.03\] { background-color: rgba(20, 20, 45, 0.035) !important; }
-[data-theme="light"] .bg-white\/\[0\.06\] { background-color: rgba(20, 20, 45, 0.06) !important; }
-[data-theme="light"] .bg-white\/5 { background-color: rgba(20, 20, 45, 0.05) !important; }
-[data-theme="light"] .bg-white\/10 { background-color: rgba(20, 20, 45, 0.07) !important; }
-[data-theme="light"] .bg-black\/20 { background-color: rgba(20, 20, 45, 0.06) !important; }
-[data-theme="light"] .hover\:bg-white\/\[0\.06\]:hover { background-color: rgba(20, 20, 45, 0.06) !important; }
-[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(20, 20, 45, 0.05) !important; }
-[data-theme="light"] .hover\:text-white:hover { color: #1c1e2b !important; }
-[data-theme="light"] .hover\:text-gray-200:hover { color: #2b2d42 !important; }

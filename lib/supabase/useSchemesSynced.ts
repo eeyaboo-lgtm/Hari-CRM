@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { mergePreReadyEdit } from "@/lib/supabase/mergePreReady";
 import { getOwnerMap } from "@/lib/supabase/ownerMap";
 import { beginWrite, clearError, reportError } from "@/lib/supabase/syncStatus";
 
@@ -57,9 +58,14 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
   const pendingWriteRef = useRef<Scheme[] | null>(null);
 
   useEffect(() => {
+    let cachedSchemes: Scheme[] = [];
     try {
       const raw = window.localStorage.getItem(localStorageKey);
-      if (raw) setValueState(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) cachedSchemes = parsed;
+        setValueState(parsed);
+      }
     } catch {
       // ignore malformed cache
     }
@@ -109,7 +115,12 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         // merge — see the 2026-08-26 note above.
         const pendingWrite = pendingWriteRef.current;
         pendingWriteRef.current = null;
-        const finalSchemes = pendingWrite ?? schemes;
+        // 2026-11-15: merge instead of superseding (see mergePreReady.ts).
+        // Merge is per scheme: a scheme you edited pre-load keeps your copy
+        // of its items; untouched schemes take the server's.
+        const finalSchemes = pendingWrite
+          ? mergePreReadyEdit(cachedSchemes, pendingWrite, schemes)
+          : schemes;
 
         setValueState(finalSchemes);
         try {
@@ -119,7 +130,7 @@ export function useSchemesSynced(localStorageKey: string, initialValue: Scheme[]
         }
         if (pendingWrite) {
           console.warn("[useSchemesSynced] syncing edit(s) made before initial load finished");
-          queueSync(pendingWrite);
+          queueSync(finalSchemes);
         }
       } catch (err) {
         console.error("[useSchemesSynced] load failed", err);

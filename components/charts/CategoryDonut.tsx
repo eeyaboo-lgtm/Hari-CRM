@@ -34,7 +34,7 @@ export default function CategoryDonut({ data }: { data: CategorySlice[] }) {
         <span className="text-2xl font-semibold text-white">
           {data[0].value}%
         </span>
-        <span className="text-[10px] text-gray-500">{data[0].name}</span>
+        <span className="text-xs text-gray-500">{data[0].name}</span>
       </div>
     </div>
   );

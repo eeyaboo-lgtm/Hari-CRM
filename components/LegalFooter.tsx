@@ -4,7 +4,7 @@ import Link from "next/link";
 // so both signed-out and signed-in users can always reach these pages.
 export default function LegalFooter({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 ${className}`}>
       <Link href="/legal/about" className="hover:text-gray-400">About</Link>
       <span>·</span>
       <Link href="/legal/privacy" className="hover:text-gray-400">Privacy Policy</Link>

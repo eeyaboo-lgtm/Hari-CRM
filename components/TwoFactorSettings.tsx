@@ -139,7 +139,7 @@ export default function TwoFactorSettings() {
             <p className="text-sm text-gray-300">Scan with your authenticator app (Google Authenticator, Authy, etc.):</p>
             {qrCode && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={qrCode} alt="2FA QR code" className="rounded-lg bg-white p-2" width={180} height={180} />
+              <img src={qrCode} alt="2FA QR code" className="keep-white rounded-lg bg-white p-2" width={180} height={180} />
             )}
             <p className="break-all text-xs text-gray-500">Or enter manually: {secret}</p>
             <input
