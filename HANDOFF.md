@@ -4,6 +4,33 @@
 always reflect only the current moment. For the full append-only history, see
 `PROJECT-STATUS.md`. For standing rules and paths, see `AGENTS.md` (read that first, always).
 
+## 2026-11-16 (evening) — hover tips + ledger: mark-paid, ending soon, history (Claude Opus) — READ FIRST
+
+**Earlier 2026-11-16 work is PUSHED (commit 6d8acab); desktop appearance checked OK by Coco; phone check pending.
+Finance delete persistence confirmed by Coco.**
+
+**This session: UNCOMMITTED + UNPUSHED. `tsc` clean, `next build` passes, ledger date logic unit-tested. Not visually checked.**
+- DB (APPLIED LIVE, approved): migration `finance_ledger_and_sub_end_date` — `finance_subscriptions.end_date`;
+  `finance_transactions` gains `source_kind, source_id, period, status ('paid'|'skipped'), auto_logged` +
+  unique (source_kind, source_id, period). Mirrored in `schema.sql`.
+- `lib/ledger.ts`: expands subs/loans/income/expenses/scheme items into dated occurrences; period maths
+  (week starts Monday); summaries. `lib/supabase/useLedger.ts`: idempotent upserts (no duplicates across devices).
+- Auto-log (Coco chose this): fixed recurring items log themselves as paid on their date, from `HISTORY_START`
+  2026-11-01, only after all hooks are `ready` (never from stale cache). One-off expenses + non-monthly scheme items
+  need a manual tick. Unticking stores `skipped` so auto-log never re-creates it.
+- Finance UI: Upcoming list now has paid ticks (shows last 3 days + 14 ahead + overdue manual items);
+  new Ending soon card (subs end date, loan final EMI, fixed-term expenses, 90 days); subscriptions get "Ends on";
+  new History & summaries (Week/Month/Quarter/Year, prev/next arrows, in/out/net/savings rate, category bars,
+  closed-period summary sentence, projections for future periods). Card spends count as actual spending.
+- InfoTip: `size="sm"`. Finance `Field` hints now use InfoTip (tap works on phones), all shortened; new tips on
+  Finance sections/fields, Settings (notifications, PIN, 2FA, Google link), Health (labels + sections).
+- Known limits: totals use TODAY's FX rates; no history before Nov 2026; health insurance expiry not in Ending soon yet.
+
+**Next, in order:** Coco pushes + checks Finance (tick/untick, History month arrows, sub end date) -> monthly/weekly
+summary email (Resend, reuse summarize()) -> security steps below (Coco moved them last).
+
+---
+
 ## 2026-11-16 — theme system rewrite + Glass/Clean toggle (Claude Fable) — READ FIRST
 
 **Done, UNCOMMITTED + UNPUSHED. `tsc --noEmit` clean and `next build` passes (built in a

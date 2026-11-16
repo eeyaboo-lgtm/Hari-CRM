@@ -1,5 +1,6 @@
 "use client";
 
+import InfoTip from "@/components/InfoTip";
 import { useEffect, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -45,7 +46,7 @@ function LinkGoogleAccount() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-        <Link2 size={16} className="text-accent-green" /> Link a Google account
+        <Link2 size={16} className="text-accent-green" /> Link a Google account<InfoTip size="sm" text="Adds another Google login that opens this same account." />
       </h2>
       <p className="relative z-10 mb-4 text-sm text-gray-400">
         Attach another Google account as an extra way to sign in to THIS account — use this if signing in with a
@@ -69,10 +70,10 @@ function LinkGoogleAccount() {
 
 type Notif = { emailReminders: boolean; browserAlerts: boolean; weeklyDigest: boolean };
 
-const NOTIF_ROWS: [keyof Notif, string][] = [
-  ["emailReminders", "Email reminders for bills & appointments"],
-  ["browserAlerts", "Browser alerts for shared updates"],
-  ["weeklyDigest", "Weekly summary digest"],
+const NOTIF_ROWS: [keyof Notif, string, string][] = [
+  ["emailReminders", "Email reminders for bills & appointments", "Daily email for bills due in 3 days and upcoming renewals."],
+  ["browserAlerts", "Browser alerts for shared updates", "Saved as a preference only; not sending alerts yet."],
+  ["weeklyDigest", "Weekly summary digest", "Saved as a preference only; the weekly email is coming soon."],
 ];
 
 function PinManager({ memberId, hasPin }: { memberId: string; hasPin: boolean }) {
@@ -315,6 +316,7 @@ function AdminAccountRecovery() {
                   <label className="flex items-center gap-1.5 text-xs text-gray-400">
                     <input type="checkbox" checked={forcePin} onChange={(e) => setForcePin(e.target.checked)} />
                     Force PIN setup on next sign-in
+                    <InfoTip size="sm" text="They must choose their own PIN when they next sign in." />
                   </label>
                   {msg[row.userId] && <p className="text-xs text-accent-orange">{msg[row.userId]}</p>}
                   <button
@@ -382,7 +384,7 @@ function SignInCredentialManager() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-        <Key size={16} className="text-accent-blue" /> Sign-in password / PIN
+        <Key size={16} className="text-accent-blue" /> Sign-in password / PIN<InfoTip size="sm" text="What you type at login; not the profile quick-unlock PIN." />
       </h2>
       <p className="relative z-10 mb-4 text-sm text-gray-400">
         This is your real sign-in credential (what you type at the login screen) — different from the optional
@@ -483,7 +485,7 @@ export default function SettingsPage() {
 
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-            <Users size={16} className="text-accent-purple" /> Household profiles
+            <Users size={16} className="text-accent-purple" /> Household profiles<InfoTip size="sm" text="A profile PIN locks only that profile, like Netflix profiles." />
           </h2>
           <p className="relative z-10 mb-4 text-sm text-gray-400">
             Add or remove household members, and set an optional 6-digit PIN each — like a Netflix profile lock.
@@ -542,7 +544,7 @@ export default function SettingsPage() {
 
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-            <Bell size={16} className="text-accent-blue" /> Notifications
+            <Bell size={16} className="text-accent-blue" /> Notifications<InfoTip size="sm" text="Choose which reminders Hari sends you." />
           </h2>
           <p className="relative z-10 mb-4 text-sm text-gray-400">
             Email reminders are real — bills/subscriptions due in 3 days, active price overrides, and membership
@@ -550,9 +552,9 @@ export default function SettingsPage() {
             Browser alerts and weekly digest are still preferences only, not wired to delivery yet.
           </p>
           <div className="relative z-10 space-y-3">
-            {NOTIF_ROWS.map(([key, label]) => (
+            {NOTIF_ROWS.map(([key, label, tip]) => (
               <div key={key} className="flex items-center justify-between text-sm text-gray-200">
-                {label}
+                <span className="flex items-center gap-0.5">{label}<InfoTip size="sm" text={tip} label={`About ${label}`} /></span>
                 <button
                   type="button"
                   onClick={() => toggle(key)}

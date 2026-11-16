@@ -1,5 +1,6 @@
 "use client";
 
+import InfoTip from "@/components/InfoTip";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ShieldCheck } from "lucide-react";
@@ -95,7 +96,7 @@ export default function TwoFactorSettings() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-        <ShieldCheck size={16} className="text-accent-green" /> Security — two-factor authentication
+        <ShieldCheck size={16} className="text-accent-green" /> Security — two-factor authentication<InfoTip size="sm" text="Asks for a code from your authenticator app at sign-in." />
       </h2>
       <p className="relative z-10 mb-4 text-sm text-gray-400">
         Optional. Adds a 6-digit authenticator-app code to sign-in, on top of your password. Login lockout and

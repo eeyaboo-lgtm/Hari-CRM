@@ -156,6 +156,17 @@ create table finance_transactions (
   created_at timestamptz not null default now()
 );
 call install_household_rls('finance_transactions');
+-- 2026-11-16 (live migration finance_ledger_and_sub_end_date): finance_transactions is the
+-- LEDGER — one row per paid/received occurrence of a recurring/one-off item.
+alter table finance_transactions
+  add column if not exists source_kind text,          -- 'sub' | 'loan' | 'income' | 'expense' | 'scheme_item'
+  add column if not exists source_id uuid,
+  add column if not exists period date,               -- the occurrence's due date
+  add column if not exists status text not null default 'paid',   -- 'paid' | 'skipped' (unticked)
+  add column if not exists auto_logged boolean not null default false;
+alter table finance_transactions add constraint finance_transactions_status_chk check (status in ('paid','skipped'));
+alter table finance_transactions add constraint finance_transactions_source_period_uniq unique (source_kind, source_id, period);
+create index if not exists finance_transactions_txn_date_idx on finance_transactions (txn_date);
 
 create table finance_loans (
   id uuid primary key default gen_random_uuid(),
@@ -190,6 +201,7 @@ create table finance_subscriptions (
   created_at timestamptz not null default now()
 );
 call install_household_rls('finance_subscriptions');
+alter table finance_subscriptions add column if not exists end_date date; -- 2026-11-16: last charge date, null = renews
 
 create table finance_income (
   id uuid primary key default gen_random_uuid(),

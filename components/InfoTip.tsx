@@ -10,7 +10,8 @@ import { createPortal } from "react-dom";
 
 const TIP_WIDTH = 240;
 
-export default function InfoTip({ text, label = "What does this do?" }: { text: string; label?: string }) {
+export default function InfoTip({ text, label = "What does this do?", size = "md" }: { text: string; label?: string; size?: "md" | "sm" }) {
+  const sm = size === "sm";
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -56,9 +57,9 @@ export default function InfoTip({ text, label = "What does this do?" }: { text: 
         onFocus={open}
         onBlur={close}
         onClick={open}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-purple"
+        className={`${sm ? "-my-1 h-6 w-6" : "h-8 w-8"} inline-flex shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-purple`}
       >
-        <Info size={16} aria-hidden />
+        <Info size={sm ? 13 : 16} aria-hidden />
       </button>
       {pos &&
         createPortal(

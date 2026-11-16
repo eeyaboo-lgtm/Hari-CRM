@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import DatePicker from "@/components/DatePicker";
 import { useLocalStorage } from "@/lib/useLocalStorage";
@@ -25,6 +25,11 @@ import {
   computeSavingsPlan,
 } from "@/lib/financeUtils";
 import { useFxRates } from "@/lib/supabase/useFxRates";
+import InfoTip from "@/components/InfoTip";
+import { useLedger } from "@/lib/supabase/useLedger";
+import { HISTORY_START, addDaysIso, loanEndDate, occurrencesBetween, todayIso as localTodayIso, type HistoryEntry, type LedgerInputs, type Occurrence } from "@/lib/ledger";
+import FinanceHistory from "@/components/finance/FinanceHistory";
+import { EndingSoon, UpcomingPayments, type EndingItem, type UpcomingItem } from "@/components/finance/UpcomingAndEnding";
 import { useSavingsGoal, type GoalVisibility } from "@/lib/supabase/useSavingsGoal";
 import { CashFlowChart, SpendCategoryDonut, BudgetMeterCard, CurrencyBalancesBars, SpendingPlanBanner, SavingsGoalProgressBar } from "@/components/finance/FinanceDeepView";
 import { Plus, X, Eye, EyeOff, CreditCard, ChevronDown, Pencil, Check, GraduationCap, ExternalLink, AlertTriangle, BarChart3, List, Wallet, Target, Trash2 } from "lucide-react";
@@ -51,6 +56,7 @@ type Sub = {
   notes: string;
   elevatedAmount: number | null; // temporary override, e.g. Tabby's 4-month spike
   effectiveUntil: string; // "" = no active override; auto-reverts once today > this date
+  endDate: string; // last charge date; "" = keeps renewing
 };
 
 type Income = {
@@ -88,9 +94,9 @@ const DEFAULT_LOANS: Loan[] = [
   { id: "l2", ownerId: "shenaal", name: "Home renovation", lenderType: "person", currency: "LKR", principal: 1200000, interestRate: 0, tenureMonths: 24, startDate: "2025-11-01", accountNumber: "" },
 ];
 const DEFAULT_SUBS: Sub[] = [
-  { id: "s1", ownerId: "shared", provider: "Netflix", currency: "AED", amount: 39, cadence: "monthly", billingDay: 18, nextDate: "", taxPct: 5, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "" },
-  { id: "s2", ownerId: "shalini", provider: "iCloud storage", currency: "USD", amount: 3, cadence: "monthly", billingDay: 24, nextDate: "", taxPct: 0, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "" },
-  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: monthsFromNowIso(3), taxPct: 5, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "" },
+  { id: "s1", ownerId: "shared", provider: "Netflix", currency: "AED", amount: 39, cadence: "monthly", billingDay: 18, nextDate: "", taxPct: 5, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "", endDate: "" },
+  { id: "s2", ownerId: "shalini", provider: "iCloud storage", currency: "USD", amount: 3, cadence: "monthly", billingDay: 24, nextDate: "", taxPct: 0, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "", endDate: "" },
+  { id: "s3", ownerId: "shenaal", provider: "Amazon Prime (annual)", currency: "AED", amount: 179, cadence: "yearly", billingDay: 1, nextDate: monthsFromNowIso(3), taxPct: 5, tenureMonths: 0, notes: "", elevatedAmount: null, effectiveUntil: "", endDate: "" },
 ];
 const DEFAULT_INCOME: Income[] = [];
 const DEFAULT_EXPENSES: Expense[] = [];
@@ -115,7 +121,12 @@ function activeSubAmount(s: Sub): number {
   if (s.elevatedAmount != null && s.effectiveUntil && s.effectiveUntil >= todayIso()) return s.elevatedAmount;
   return s.amount;
 }
+/** A subscription whose end date has passed costs nothing going forward. */
+function subEnded(s: Sub): boolean {
+  return !!s.endDate && s.endDate < todayIso();
+}
 function monthlySubCost(s: Sub): number {
+  if (subEnded(s)) return 0;
   const withTax = activeSubAmount(s) * (1 + s.taxPct / 100);
   return s.cadence === "monthly" ? withTax : withTax / 12;
 }
@@ -158,6 +169,15 @@ function schemeItemActive(it: SchemeItem): boolean {
   return it.cadence === "monthly" || !it.paid;
 }
 const todayIso = () => new Date().toISOString().slice(0, 10);
+function toLedgerInputs(ss: Sub[], ls: Loan[], is: Income[], es: Expense[], scs: Scheme[]): LedgerInputs {
+  return {
+    subs: ss.map((s) => ({ ...s, endDate: s.endDate || "" })),
+    loans: ls.map((l) => ({ id: l.id, ownerId: l.ownerId, name: l.name, currency: l.currency, startDate: l.startDate, tenureMonths: l.tenureMonths, emi: calcEMI(l.principal, l.interestRate, l.tenureMonths) })),
+    income: is,
+    expenses: es,
+    schemes: scs,
+  };
+}
 
 export default function FinancePage() {
   const { members } = useHousehold();
@@ -189,7 +209,7 @@ export default function FinancePage() {
     toRow: (s) => ({ card_id: s.cardId, label: s.label, amount: s.amount, currency: s.currency, spend_date: s.date }),
     fromRow: (row) => ({ id: row.id, cardId: row.card_id, label: row.label, amount: Number(row.amount) || 0, currency: row.currency, date: row.spend_date }),
   });
-  const [loans, setLoans] = useSupabaseSynced<Loan>("finance_loans", "finance.loans.v3", DEFAULT_LOANS, {
+  const [loans, setLoans, loansSync] = useSupabaseSynced<Loan>("finance_loans", "finance.loans.v3", DEFAULT_LOANS, {
     ownerLocalId: (l) => l.ownerId,
     toRow: (l) => ({
       name: l.name, lender: l.lenderType, principal: l.principal, currency: l.currency, interest_rate: l.interestRate,
@@ -199,19 +219,19 @@ export default function FinancePage() {
     }),
     fromRow: (row, ownerId) => ({ id: row.id, ownerId, name: row.name, lenderType: (row.lender as Loan["lenderType"]) || "bank", currency: row.currency, principal: Number(row.principal) || 0, interestRate: Number(row.interest_rate) || 0, tenureMonths: Number(row.tenure_months) || 0, startDate: row.start_date, accountNumber: row.account_number ?? "" }),
   });
-  const [subs, setSubs] = useSupabaseSynced<Sub>("finance_subscriptions", "finance.subs.v3", DEFAULT_SUBS, {
+  const [subs, setSubs, subsSync] = useSupabaseSynced<Sub>("finance_subscriptions", "finance.subs.v3", DEFAULT_SUBS, {
     ownerLocalId: (s) => s.ownerId,
-    toRow: (s) => ({ name: s.provider, amount: s.amount, currency: s.currency, billing_cycle: s.cadence, next_due_date: s.nextDate || todayIso(), billing_day: s.billingDay, tax_pct: s.taxPct, tenure_months: s.tenureMonths, auto_renew: true, notes: s.notes || null, elevated_amount: s.elevatedAmount, effective_until: s.effectiveUntil || null }),
-    fromRow: (row, ownerId) => ({ id: row.id, ownerId, provider: row.name, currency: row.currency, amount: Number(row.amount) || 0, cadence: (row.billing_cycle as Sub["cadence"]) || "monthly", billingDay: Number(row.billing_day) || 1, nextDate: row.next_due_date ?? "", taxPct: Number(row.tax_pct) || 0, tenureMonths: Number(row.tenure_months) || 0, notes: row.notes ?? "", elevatedAmount: row.elevated_amount != null ? Number(row.elevated_amount) : null, effectiveUntil: row.effective_until ?? "" }),
+    toRow: (s) => ({ name: s.provider, amount: s.amount, currency: s.currency, billing_cycle: s.cadence, next_due_date: s.nextDate || todayIso(), billing_day: s.billingDay, tax_pct: s.taxPct, tenure_months: s.tenureMonths, auto_renew: true, notes: s.notes || null, elevated_amount: s.elevatedAmount, effective_until: s.effectiveUntil || null, end_date: s.endDate || null }),
+    fromRow: (row, ownerId) => ({ id: row.id, ownerId, provider: row.name, currency: row.currency, amount: Number(row.amount) || 0, cadence: (row.billing_cycle as Sub["cadence"]) || "monthly", billingDay: Number(row.billing_day) || 1, nextDate: row.next_due_date ?? "", taxPct: Number(row.tax_pct) || 0, tenureMonths: Number(row.tenure_months) || 0, notes: row.notes ?? "", elevatedAmount: row.elevated_amount != null ? Number(row.elevated_amount) : null, effectiveUntil: row.effective_until ?? "", endDate: row.end_date ?? "" }),
   });
-  const [schemes, setSchemes] = useSchemesSynced("finance.schemes.v1", DEFAULT_SCHEMES);
+  const [schemes, setSchemes, schemesSync] = useSchemesSynced("finance.schemes.v1", DEFAULT_SCHEMES);
   // Item 1: recurring income. Item 2: unified Add Expense flow (monthly/fixed-term/one-off).
-  const [income, setIncome] = useSupabaseSynced<Income>("finance_income", "finance.income.v1", DEFAULT_INCOME, {
+  const [income, setIncome, incomeSync] = useSupabaseSynced<Income>("finance_income", "finance.income.v1", DEFAULT_INCOME, {
     ownerLocalId: (i) => i.ownerId,
     toRow: (i) => ({ source: i.source, income_type: i.incomeType || "other", amount: i.amount, currency: i.currency, received_date: i.receivedDate || todayIso(), notes: i.notes || null, is_recurring: i.isRecurring, cadence: i.cadence }),
     fromRow: (row, ownerId) => ({ id: row.id, ownerId, source: row.source, incomeType: row.income_type ?? "other", amount: Number(row.amount) || 0, currency: row.currency, receivedDate: row.received_date ?? "", notes: row.notes ?? "", isRecurring: !!row.is_recurring, cadence: (row.cadence as Income["cadence"]) || "monthly" }),
   });
-  const [expenses, setExpenses] = useSupabaseSynced<Expense>("finance_expenses", "finance.expenses.v1", DEFAULT_EXPENSES, {
+  const [expenses, setExpenses, expensesSync] = useSupabaseSynced<Expense>("finance_expenses", "finance.expenses.v1", DEFAULT_EXPENSES, {
     ownerLocalId: (e) => e.ownerId,
     toRow: (e) => ({
       expense_type: e.expenseType, label: e.label, category: e.category || null, currency: e.currency, amount: e.amount,
@@ -359,22 +379,9 @@ export default function FinancePage() {
   const safeToSpend = monthlyIncomeConverted - monthlyOutflowConverted;
   const spStatus = spendingPlanStatus(safeToSpend, monthlyIncomeConverted);
 
-  // Upcoming payments (subs + loans + scheme items) within 14 days, soonest first.
-  const upcoming = [
-    ...fSubs.map((s) => ({ label: s.provider, currency: s.currency, amount: activeSubAmount(s), date: subNextDate(s) })),
-    ...fLoans.map((l) => ({ label: l.name, currency: l.currency, amount: calcEMI(l.principal, l.interestRate, l.tenureMonths), date: loanNextDueDate(l) })),
-    ...fSchemes.flatMap((sc) =>
-      sc.items.filter(schemeItemActive).map((it) => ({ label: `${sc.name} — ${it.label}`, currency: sc.currency, amount: it.amount, date: schemeItemDate(it) }))
-    ),
-    ...fExpenses.filter((e) => !e.paid && e.dueDate).map((e) => ({ label: e.label, currency: e.currency, amount: e.amount, date: new Date(e.dueDate) })),
-  ]
-    .map((p) => ({ ...p, days: daysUntil(p.date) }))
-    .filter((p) => p.days <= 14)
-    .sort((a, b) => a.days - b.days);
-
   // Next major non-monthly payment landing 2–4 months out (yearly subs + non-monthly scheme items).
   const majorCandidates = [
-    ...fSubs.filter((s) => s.cadence === "yearly").map((s) => ({ label: s.provider, currency: s.currency, amount: activeSubAmount(s) * (1 + s.taxPct / 100), owner: ownerName(s.ownerId), date: subNextDate(s) })),
+    ...fSubs.filter((s) => s.cadence === "yearly" && !subEnded(s)).map((s) => ({ label: s.provider, currency: s.currency, amount: activeSubAmount(s) * (1 + s.taxPct / 100), owner: ownerName(s.ownerId), date: subNextDate(s) })),
     ...fSchemes.flatMap((sc) =>
       sc.items.filter((it) => it.cadence !== "monthly" && schemeItemActive(it)).map((it) => ({ label: `${sc.name} — ${it.label}`, currency: sc.currency, amount: it.amount, owner: ownerName(sc.ownerId), date: schemeItemDate(it) }))
     ),
@@ -383,6 +390,67 @@ export default function FinancePage() {
     .filter((x) => x.days >= 55 && x.days <= 125)
     .sort((a, b) => a.days - b.days);
   const nextMajor = majorCandidates[0];
+
+  // ---------------- Ledger: mark-paid, auto-log, history, ending soon (2026-11-16) ----------------
+  const ledger = useLedger();
+  const lt = localTodayIso();
+  const allInputs = useMemo(() => toLedgerInputs(subs, loans, income, expenses, schemes), [subs, loans, income, expenses, schemes]);
+  const allReady = subsSync.ready && loansSync.ready && incomeSync.ready && expensesSync.ready && schemesSync.ready && ledger.ready;
+  // Auto-log fixed recurring items on their date. Waits for fresh server data
+  // (never logs from a stale cache) and tries each occurrence once per page
+  // load, so a failed write cannot loop.
+  const autoTried = useRef(new Set<string>());
+  useEffect(() => {
+    if (!allReady) return;
+    const logged = new Set(ledger.rows.map((r) => r.key));
+    const due = occurrencesBetween(allInputs, HISTORY_START, lt).filter((o) => o.auto && !logged.has(o.key) && !autoTried.current.has(o.key));
+    if (due.length === 0) return;
+    due.forEach((o) => autoTried.current.add(o.key));
+    ledger.autoLog(due);
+  }, [allReady, allInputs, ledger, lt]);
+
+  const ledgerByKey = useMemo(() => new Map(ledger.rows.map((r) => [r.key, r])), [ledger.rows]);
+  const isPaid = (o: Occurrence) => {
+    const r = ledgerByKey.get(o.key);
+    return r ? r.status === "paid" : !!o.legacyPaid;
+  };
+  const toggleOcc = (o: Occurrence, paid: boolean) => {
+    if (paid) ledger.markPaid(o);
+    else ledger.unmark(o);
+    // Keep the old one-off "paid" flags in step so monthly outflow maths agrees.
+    if (o.sourceKind === "expense" && o.legacyPaid !== undefined) setExpenses((prev) => prev.map((e) => (e.id === o.sourceId ? { ...e, paid } : e)));
+    if (o.sourceKind === "scheme_item" && o.legacyPaid !== undefined)
+      setSchemes((prev) => prev.map((sc) => ({ ...sc, items: sc.items.map((it) => (it.id === o.sourceId ? { ...it, paid } : it)) })));
+  };
+
+  const fInputs = toLedgerInputs(fSubs, fLoans, fIncome, fExpenses, fSchemes);
+  // Next 14 days, the last 3 days (so an auto-tick can be undone), and anything manual still unpaid from the last 60 days.
+  const upcomingItems: UpcomingItem[] = occurrencesBetween(fInputs, addDaysIso(lt, -60), addDaysIso(lt, 14))
+    .map((occ) => ({ occ, paid: isPaid(occ) }))
+    .filter(({ occ, paid }) => occ.date >= addDaysIso(lt, -3) || (!paid && !occ.auto));
+
+  const endingItems: EndingItem[] = [
+    ...fSubs.filter((s) => s.endDate).map((s) => ({ key: `sub:${s.id}`, label: s.provider, kind: "Subscription", date: s.endDate, ownerId: s.ownerId })),
+    ...fLoans.filter((l) => loanEndDate(l)).map((l) => ({ key: `loan:${l.id}`, label: l.name, kind: "Loan — final payment", date: loanEndDate(l), ownerId: l.ownerId })),
+    ...fExpenses.filter((e) => e.expenseType === "fixed_term" && e.endDate).map((e) => ({ key: `exp:${e.id}`, label: e.label, kind: "Fixed-term cost", date: e.endDate, ownerId: e.ownerId })),
+  ]
+    .filter((x) => x.date >= addDaysIso(lt, -30) && x.date <= addDaysIso(lt, 90))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // History = paid ledger rows + card spends (actuals) + not-yet-recorded future occurrences (projections).
+  const historyEntries: HistoryEntry[] = [
+    ...ledger.rows
+      .filter((r) => r.status === "paid" && inFilter(r.ownerId))
+      .map((r) => ({ key: r.id, date: r.date, label: r.label, category: r.category || (r.direction === "in" ? "Income" : "Other"), ownerId: r.ownerId, amount: r.amount, currency: r.currency, direction: r.direction, projected: false })),
+    ...cardSpends
+      .map((sp) => ({ sp, card: cards.find((c) => c.id === sp.cardId) }))
+      .filter(({ card }) => inFilter(card?.ownerId ?? "shared"))
+      .map(({ sp, card }) => ({ key: `spend:${sp.id}`, date: sp.date, label: card ? `${sp.label} (${card.name})` : sp.label, category: "Card spending", ownerId: card?.ownerId ?? "shared", amount: sp.amount, currency: sp.currency, direction: "out" as const, projected: false })),
+    ...occurrencesBetween(fInputs, lt, addDaysIso(lt, 400))
+      .filter((o) => !ledgerByKey.has(o.key) && !o.legacyPaid)
+      .map((o) => ({ key: `proj:${o.key}`, date: o.date, label: o.label, category: o.category, ownerId: o.ownerId, amount: o.amount, currency: o.currency, direction: o.direction, projected: true })),
+  ];
+  const toPrimary = useCallback((amount: number, cur: string) => convertAmount(amount, cur, PRIMARY_CURRENCY, fxRates), [fxRates]);
 
   const inputCls = "min-w-0 flex-1 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple";
   const selectCls = "rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none";
@@ -403,20 +471,13 @@ export default function FinancePage() {
   // select field gets a persistent micro-label instead of relying on
   // placeholder text.
   const Field = ({ label, children, dark, hint }: { label: string; children: React.ReactNode; dark?: boolean; hint?: string }) => (
-    <label className="flex flex-col gap-0.5">
-      <span className={`flex items-center gap-1 text-xs font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>
+    <div role="group" aria-label={label} className="flex flex-col gap-0.5">
+      <span className={`flex items-center gap-0.5 text-xs font-medium uppercase tracking-wide ${dark ? "text-white/60" : "text-gray-500"}`}>
         {label}
-        {hint && (
-          <span
-            title={hint}
-            className={`flex h-3 w-3 shrink-0 cursor-help items-center justify-center rounded-full text-[8px] normal-case leading-none ${dark ? "bg-white/20 text-white/80" : "bg-white/10 text-gray-400"}`}
-          >
-            ?
-          </span>
-        )}
+        {hint && <InfoTip size="sm" text={hint} label={`About ${label}`} />}
       </span>
       {children}
-    </label>
+    </div>
   );
 
   const BlurAmount = ({ id, text }: { id: string; text: string }) => {
@@ -504,11 +565,11 @@ export default function FinancePage() {
   };
 
   // ---------------- Subscriptions ----------------
-  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0" });
+  const [newSub, setNewSub] = useState({ ownerId: "shared", provider: "", currency: "AED" as Currency, amount: "", cadence: "monthly" as Sub["cadence"], billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0", endDate: "" });
   const addSub = () => {
     if (!newSub.provider.trim() || !newSub.amount) return;
-    setSubs((prev) => [...prev, { id: uid(), ownerId: newSub.ownerId, provider: newSub.provider.trim(), currency: newSub.currency, amount: Number(newSub.amount), cadence: newSub.cadence, billingDay: Number(newSub.billingDay) || 1, nextDate: newSub.nextDate, taxPct: Number(newSub.taxPct) || 0, tenureMonths: Number(newSub.tenureMonths) || 0, notes: "", elevatedAmount: null, effectiveUntil: "" }]);
-    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0" });
+    setSubs((prev) => [...prev, { id: uid(), ownerId: newSub.ownerId, provider: newSub.provider.trim(), currency: newSub.currency, amount: Number(newSub.amount), cadence: newSub.cadence, billingDay: Number(newSub.billingDay) || 1, nextDate: newSub.nextDate, taxPct: Number(newSub.taxPct) || 0, tenureMonths: Number(newSub.tenureMonths) || 0, notes: "", elevatedAmount: null, effectiveUntil: "", endDate: newSub.endDate }]);
+    setNewSub({ ownerId: "shared", provider: "", currency: "AED", amount: "", cadence: "monthly", billingDay: "1", nextDate: todayIso(), taxPct: "0", tenureMonths: "0", endDate: "" });
   };
   const removeSub = (id: string) => setSubs((prev) => prev.filter((s) => s.id !== id));
   const [editingSubId, setEditingSubId] = useState<string | null>(null);
@@ -746,27 +807,11 @@ export default function FinancePage() {
           </div>
         </section>
 
-        {/* Upcoming + next major payment */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {/* Upcoming (mark paid) + next major payment + ending soon */}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <UpcomingPayments items={upcomingItems} onToggle={toggleOcc} ownerName={ownerName} />
           <section className="glass-card rounded-xl2 p-5">
-            <h2 className="relative z-10 mb-4 font-medium text-white">Upcoming payments (next 14 days)</h2>
-            <div className="relative z-10 space-y-2">
-              {upcoming.length === 0 && <p className="text-xs text-gray-500">Nothing due in the next two weeks.</p>}
-              {upcoming.map((p, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <p className="text-gray-200">{p.label}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-gray-300">{formatMoney(p.amount, p.currency)}</p>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${p.days <= 3 ? "bg-red-500/20 text-red-400" : p.days <= 7 ? "bg-accent-orange/20 text-accent-orange" : "bg-accent-blue/20 text-accent-blue"}`}>
-                      {formatDaysUntil(p.days)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="glass-card rounded-xl2 p-5">
-            <h2 className="relative z-10 mb-4 font-medium text-white">Next major payment (2–4 months out)</h2>
+            <h2 className="relative z-10 mb-4 flex items-center gap-1 font-medium text-white">Next major payment (2–4 months out)<InfoTip size="sm" text="The biggest single payment landing two to four months out." label="About Next major payment (2–4 months out)" /></h2>
             <div className="relative z-10">
               {nextMajor ? (
                 <div className="text-sm">
@@ -779,11 +824,14 @@ export default function FinancePage() {
               )}
             </div>
           </section>
+          <EndingSoon items={endingItems} ownerName={ownerName} />
         </div>
+
+        <FinanceHistory entries={historyEntries} convert={toPrimary} currency={PRIMARY_CURRENCY} ownerName={ownerName} />
 
         {/* Accounts */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-2 font-medium text-white">Bank &amp; BNPL accounts</h2>
+          <h2 className="relative z-10 mb-2 flex items-center gap-1 font-medium text-white">Bank &amp; BNPL accounts<InfoTip size="sm" text="Balances you update by hand; Hari never connects to your bank." label="About Bank &amp; BNPL accounts" /></h2>
           <p className="relative z-10 mb-3 flex items-start gap-1.5 text-xs text-accent-orange">
             <AlertTriangle size={13} className="mt-0.5 shrink-0" />
             Bank URL is just a quick link to the login page — never save full login credentials, passwords, or
@@ -804,7 +852,7 @@ export default function FinancePage() {
                 <div key={a.id} className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
                   <Field label="Owner"><OwnerSelect value={accountDraft.ownerId} onChange={(v) => setAccountDraft({ ...accountDraft, ownerId: v })} /></Field>
                   <Field label="Name"><input value={accountDraft.name} onChange={(e) => setAccountDraft({ ...accountDraft, name: e.target.value })} className={inputCls} /></Field>
-                  <Field label="Type">
+                  <Field label="Type" hint="Bank account, or buy-now-pay-later like Tabby or Tamara.">
                     <select value={accountDraft.type} onChange={(e) => setAccountDraft({ ...accountDraft, type: e.target.value as "bank" | "bnpl" })} className={selectCls}>
                       <option value="bank">Bank</option><option value="bnpl">BNPL</option>
                     </select>
@@ -845,7 +893,7 @@ export default function FinancePage() {
           <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
             <Field label="Owner"><OwnerSelect value={newAccount.ownerId} onChange={(v) => setNewAccount((s) => ({ ...s, ownerId: v }))} /></Field>
             <Field label="Account name"><input placeholder="e.g. Emirates NBD current" value={newAccount.name} onChange={(e) => setNewAccount((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
-            <Field label="Type">
+            <Field label="Type" hint="Bank account, or buy-now-pay-later like Tabby or Tamara.">
               <select value={newAccount.type} onChange={(e) => setNewAccount((s) => ({ ...s, type: e.target.value as "bank" | "bnpl" }))} className={selectCls}>
                 <option value="bank">Bank</option>
                 <option value="bnpl">BNPL</option>
@@ -857,7 +905,7 @@ export default function FinancePage() {
               </select>
             </Field>
             <Field label="Balance"><input placeholder="0" type="number" value={newAccount.balance} onChange={(e) => setNewAccount((s) => ({ ...s, balance: e.target.value }))} className={smallInputCls} /></Field>
-            <Field label="Bank URL" hint="Optional — lets the account show a quick link to your bank's login page."><input placeholder="https:// (optional)" value={newAccount.bankUrl} onChange={(e) => setNewAccount((s) => ({ ...s, bankUrl: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Bank URL" hint="Optional link to your bank's login page."><input placeholder="https:// (optional)" value={newAccount.bankUrl} onChange={(e) => setNewAccount((s) => ({ ...s, bankUrl: e.target.value }))} className={inputCls} /></Field>
             <button type="button" onClick={addAccount} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -866,7 +914,7 @@ export default function FinancePage() {
 
         {/* Cards */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-4 font-medium text-white">Cards</h2>
+          <h2 className="relative z-10 mb-4 flex items-center gap-1 font-medium text-white">Cards<InfoTip size="sm" text="Credit and debit cards; log spends to track limit use." label="About Cards" /></h2>
           <div className="relative z-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {fCards.map((c) => {
               const emi = c.tenureMonths > 0 ? calcEMI(c.outstanding, c.interestRate, c.tenureMonths) : 0;
@@ -914,10 +962,10 @@ export default function FinancePage() {
                         </div>
                         <div className="grid grid-cols-2 gap-1.5">
                           <Field label="Credit limit" dark><input type="number" value={cardDraft.creditLimit} onChange={(e) => setCardDraft({ ...cardDraft, creditLimit: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
-                          <Field label="Limit used" dark><input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="Limit used" dark hint="How much of the credit limit is used now."><input type="number" value={cardDraft.limitUsed} onChange={(e) => setCardDraft({ ...cardDraft, limitUsed: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                           <Field label="Outstanding" dark><input type="number" value={cardDraft.outstanding} onChange={(e) => setCardDraft({ ...cardDraft, outstanding: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
-                          <Field label="APR %" dark><input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
-                          <Field label="EMI months" dark hint="Number of months you're paying the outstanding balance off over on an installment plan. Leave at 0 if it's just a regular revolving balance with no fixed payoff date."><input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="APR %" dark hint="Yearly interest rate, used to estimate monthly cost."><input type="number" value={cardDraft.interestRate} onChange={(e) => setCardDraft({ ...cardDraft, interestRate: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
+                          <Field label="EMI months" dark hint="Months to pay this balance off. 0 = normal revolving balance."><input type="number" value={cardDraft.tenureMonths} onChange={(e) => setCardDraft({ ...cardDraft, tenureMonths: Number(e.target.value) })} className="w-full rounded-lg bg-white/10 px-2 py-1 text-white outline-none" /></Field>
                           <Field label="Owner" dark><OwnerSelect value={cardDraft.ownerId} onChange={(v) => setCardDraft({ ...cardDraft, ownerId: v })} /></Field>
                         </div>
                         <div className="flex gap-2 pt-1">
@@ -992,10 +1040,10 @@ export default function FinancePage() {
               </select>
             </Field>
             <Field label="Credit limit"><input placeholder="0" type="number" value={newCard.creditLimit} onChange={(e) => setNewCard((s) => ({ ...s, creditLimit: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="Limit used"><input placeholder="0" type="number" value={newCard.limitUsed} onChange={(e) => setNewCard((s) => ({ ...s, limitUsed: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="Outstanding" hint="What you currently owe on this card — the balance interest/EMI is calculated on."><input placeholder="0" type="number" value={newCard.outstanding} onChange={(e) => setNewCard((s) => ({ ...s, outstanding: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="APR %"><input placeholder="0" type="number" value={newCard.interestRate} onChange={(e) => setNewCard((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="EMI months" hint="Number of months you're paying the outstanding balance off over on an installment plan. Leave at 0 if it's just a regular revolving balance with no fixed payoff date."><input placeholder="0" type="number" value={newCard.tenureMonths} onChange={(e) => setNewCard((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Limit used" hint="How much of the credit limit is used now."><input placeholder="0" type="number" value={newCard.limitUsed} onChange={(e) => setNewCard((s) => ({ ...s, limitUsed: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Outstanding" hint="What you owe on this card right now."><input placeholder="0" type="number" value={newCard.outstanding} onChange={(e) => setNewCard((s) => ({ ...s, outstanding: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="APR %" hint="Yearly interest rate, used to estimate monthly cost."><input placeholder="0" type="number" value={newCard.interestRate} onChange={(e) => setNewCard((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="EMI months" hint="Months to pay this balance off. 0 = normal revolving balance."><input placeholder="0" type="number" value={newCard.tenureMonths} onChange={(e) => setNewCard((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             <button type="button" onClick={addCard} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1004,7 +1052,7 @@ export default function FinancePage() {
 
         {/* Loans */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-4 font-medium text-white">Loans &amp; installments</h2>
+          <h2 className="relative z-10 mb-4 flex items-center gap-1 font-medium text-white">Loans &amp; installments<InfoTip size="sm" text="Fixed-term borrowing; EMI and payoff countdown are calculated for you." label="About Loans &amp; installments" /></h2>
           <div className="relative z-10 space-y-4">
             {fLoans.map((l) => {
               if (editingLoanId === l.id && loanDraft) {
@@ -1023,8 +1071,8 @@ export default function FinancePage() {
                       </select>
                     </Field>
                     <Field label="Principal"><input type="number" value={loanDraft.principal} onChange={(e) => setLoanDraft({ ...loanDraft, principal: Number(e.target.value) })} className={smallInputCls} /></Field>
-                    <Field label="APR %"><input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} className={smallInputCls} /></Field>
-                    <Field label="Tenure (mo)" hint="Loan term in months — used to calculate your monthly EMI and count down to payoff. Loans always need a fixed term, so this can't be 0."><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="APR %" hint="Yearly interest rate, used to estimate monthly cost."><input type="number" value={loanDraft.interestRate} onChange={(e) => setLoanDraft({ ...loanDraft, interestRate: Number(e.target.value) })} className={smallInputCls} /></Field>
+                    <Field label="Tenure (mo)" hint="Loan term in months; sets the EMI and payoff countdown."><input type="number" value={loanDraft.tenureMonths} onChange={(e) => setLoanDraft({ ...loanDraft, tenureMonths: Number(e.target.value) })} className={smallInputCls} /></Field>
                     <Field label="Start date"><DatePicker value={loanDraft.startDate} onChange={(v) => setLoanDraft({ ...loanDraft, startDate: v })} /></Field>
                     <Field label="Account #"><input value={loanDraft.accountNumber} onChange={(e) => setLoanDraft({ ...loanDraft, accountNumber: e.target.value })} className={inputCls} /></Field>
                     <button type="button" onClick={saveLoan} className="text-accent-green hover:text-white"><Check size={16} /></button>
@@ -1072,10 +1120,10 @@ export default function FinancePage() {
               </select>
             </Field>
             <Field label="Principal" hint="The original loan amount borrowed."><input placeholder="0" type="number" value={newLoan.principal} onChange={(e) => setNewLoan((s) => ({ ...s, principal: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="APR %"><input placeholder="0" type="number" value={newLoan.interestRate} onChange={(e) => setNewLoan((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="Tenure (mo)" hint="Loan term in months — used to calculate your monthly EMI and count down to payoff. Loans always need a fixed term, so this can't be 0."><input placeholder="e.g. 36" type="number" value={newLoan.tenureMonths} onChange={(e) => setNewLoan((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="APR %" hint="Yearly interest rate, used to estimate monthly cost."><input placeholder="0" type="number" value={newLoan.interestRate} onChange={(e) => setNewLoan((s) => ({ ...s, interestRate: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Tenure (mo)" hint="Loan term in months; sets the EMI and payoff countdown."><input placeholder="e.g. 36" type="number" value={newLoan.tenureMonths} onChange={(e) => setNewLoan((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             <Field label="Start date"><DatePicker value={newLoan.startDate} onChange={(v) => setNewLoan((s) => ({ ...s, startDate: v }))} /></Field>
-            <Field label="Account #" hint="Optional reference number, just for your own notes."><input placeholder="optional" value={newLoan.accountNumber} onChange={(e) => setNewLoan((s) => ({ ...s, accountNumber: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Account #" hint="Optional reference, just for your notes."><input placeholder="optional" value={newLoan.accountNumber} onChange={(e) => setNewLoan((s) => ({ ...s, accountNumber: e.target.value }))} className={inputCls} /></Field>
             <button type="button" onClick={addLoan} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1085,7 +1133,7 @@ export default function FinancePage() {
         {/* Payment schemes — education / multi-line-item plans */}
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-            <GraduationCap size={16} /> Payment schemes
+            <GraduationCap size={16} /> Payment schemes<InfoTip size="sm" text="Plans with several irregular payments, like course fees." />
           </h2>
           <p className="relative z-10 mb-4 text-xs text-gray-500">
             For plans with several irregular line items — e.g. a university programme with a termly fee, monthly materials cost, and one-off exam fees.
@@ -1146,7 +1194,7 @@ export default function FinancePage() {
                     <div className="mt-2 flex flex-wrap items-end gap-1.5">
                       <Field label="Line item"><input placeholder="e.g. Exam fee" value={d.label} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, label: e.target.value } }))} className={inputCls} /></Field>
                       <Field label="Amount"><input placeholder="0" type="number" value={d.amount} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, amount: e.target.value } }))} className={smallInputCls} /></Field>
-                      <Field label="Cadence">
+                      <Field label="Cadence" hint="One-time, monthly, per term or yearly.">
                         <select value={d.cadence} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, cadence: e.target.value as SchemeCadence } }))} className={selectCls}>
                           <option value="onetime">One-time</option>
                           <option value="monthly">Monthly</option>
@@ -1155,9 +1203,9 @@ export default function FinancePage() {
                         </select>
                       </Field>
                       {d.cadence === "monthly" ? (
-                        <Field label="Billing day"><input type="number" min={1} max={31} placeholder="1-31" value={d.billingDay} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, billingDay: e.target.value } }))} className={smallInputCls} /></Field>
+                        <Field label="Billing day" hint="Day of the month it's charged (1-31)."><input type="number" min={1} max={31} placeholder="1-31" value={d.billingDay} onChange={(e) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, billingDay: e.target.value } }))} className={smallInputCls} /></Field>
                       ) : (
-                        <Field label="Due date"><DatePicker value={d.dueDate} onChange={(v) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, dueDate: v } }))} /></Field>
+                        <Field label="Due date" hint="The date this payment is due."><DatePicker value={d.dueDate} onChange={(v) => setItemDraft((p) => ({ ...p, [sc.id]: { ...d, dueDate: v } }))} /></Field>
                       )}
                       <button type="button" onClick={() => addSchemeItem(sc.id)} className="flex items-center gap-1 rounded-xl bg-accent-purple/80 px-3 py-2 text-xs text-white">
                         <Plus size={12} /> Add line
@@ -1171,7 +1219,7 @@ export default function FinancePage() {
           </div>
           <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
             <Field label="Owner"><OwnerSelect value={newScheme.ownerId} onChange={(v) => setNewScheme((s) => ({ ...s, ownerId: v }))} /></Field>
-            <Field label="Scheme name" hint="A plan with several irregular payments — e.g. a course with a termly fee plus one-off exam fees. Add each payment as a line item below once created."><input placeholder="e.g. MBA — Term 3" value={newScheme.name} onChange={(e) => setNewScheme((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
+            <Field label="Scheme name" hint="A plan with several irregular payments, e.g. course fees."><input placeholder="e.g. MBA — Term 3" value={newScheme.name} onChange={(e) => setNewScheme((s) => ({ ...s, name: e.target.value }))} className={inputCls} /></Field>
             <Field label="Institution"><input placeholder="optional" value={newScheme.institution} onChange={(e) => setNewScheme((s) => ({ ...s, institution: e.target.value }))} className={inputCls} /></Field>
             <Field label="Currency">
               <select value={newScheme.currency} onChange={(e) => setNewScheme((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
@@ -1186,7 +1234,7 @@ export default function FinancePage() {
 
         {/* Subscriptions */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-4 font-medium text-white">Subscriptions</h2>
+          <h2 className="relative z-10 mb-4 flex items-center gap-1 font-medium text-white">Subscriptions<InfoTip size="sm" text="Recurring charges; tax and temporary price changes are included." label="About Subscriptions" /></h2>
           <div className="relative z-10 space-y-3">
             {fSubs.map((s) => {
               if (editingSubId === s.id && subDraft) {
@@ -1200,25 +1248,26 @@ export default function FinancePage() {
                         <option>AED</option><option>LKR</option><option>USD</option>
                       </select>
                     </Field>
-                    <Field label="Cadence">
+                    <Field label="Cadence" hint="Monthly uses a billing day; yearly uses the next date.">
                       <select value={subDraft.cadence} onChange={(e) => setSubDraft({ ...subDraft, cadence: e.target.value as Sub["cadence"] })} className={selectCls}>
                         <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
                       </select>
                     </Field>
                     {subDraft.cadence === "monthly" ? (
-                      <Field label="Billing day"><input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} /></Field>
+                      <Field label="Billing day" hint="Day of the month it's charged (1-31)."><input type="number" min={1} max={31} value={subDraft.billingDay} onChange={(e) => setSubDraft({ ...subDraft, billingDay: Number(e.target.value) })} className={smallInputCls} /></Field>
                     ) : (
-                      <Field label="Next date"><DatePicker value={subDraft.nextDate} onChange={(v) => setSubDraft({ ...subDraft, nextDate: v })} /></Field>
+                      <Field label="Next date" hint="Next charge date, used for yearly items."><DatePicker value={subDraft.nextDate} onChange={(v) => setSubDraft({ ...subDraft, nextDate: v })} /></Field>
                     )}
-                    <Field label="Tax %" hint="VAT or other tax added on top of the amount each cycle."><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
-                    <Field label="Tenure (mo)" hint="Leave at 0 for an ongoing subscription that repeats every cycle with no end date (most subs). Enter a number of months only if this is a fixed-length contract that should show a countdown, e.g. 20 for a 20-month plan.">
+                    <Field label="Tax %" hint="VAT or other tax added to each charge."><input type="number" value={subDraft.taxPct} onChange={(e) => setSubDraft({ ...subDraft, taxPct: Number(e.target.value) })} className="w-16 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
+                    <Field label="Tenure (mo)" hint="0 = ongoing. Enter months only for a fixed-length contract.">
                       <input type="number" value={subDraft.tenureMonths} onChange={(e) => setSubDraft({ ...subDraft, tenureMonths: Number(e.target.value) })} className="w-20 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" />
                     </Field>
+                    <Field label="Ends on" hint="Last charge date. Leave blank if it keeps renewing."><DatePicker value={subDraft.endDate || ""} onChange={(v) => setSubDraft({ ...subDraft, endDate: v })} /></Field>
                     <Field label="Notes"><input placeholder="e.g. extra interest-on-minimum" value={subDraft.notes} onChange={(e) => setSubDraft({ ...subDraft, notes: e.target.value })} className={inputCls} /></Field>
-                    <Field label="Temp override amount" hint="Only fill this in if the amount charged is temporarily different from usual (e.g. a spike). Leave blank the rest of the time — the normal Amount above keeps being used.">
+                    <Field label="Temp override amount" hint="A temporarily different charge. Leave blank normally.">
                       <input type="number" placeholder="blank = none" value={subDraft.elevatedAmount ?? ""} onChange={(e) => setSubDraft({ ...subDraft, elevatedAmount: e.target.value === "" ? null : Number(e.target.value) })} className={smallInputCls} />
                     </Field>
-                    <Field label="Override until" hint="The last date the temporary override amount applies. After this date it automatically reverts to the normal Amount — you don't need to remove it manually.">
+                    <Field label="Override until" hint="Last day of the override; it reverts automatically after.">
                       <DatePicker value={subDraft.effectiveUntil} onChange={(v) => setSubDraft({ ...subDraft, effectiveUntil: v })} />
                     </Field>
                     <button type="button" onClick={saveSub} className="text-accent-green hover:text-white"><Check size={16} /></button>
@@ -1236,6 +1285,11 @@ export default function FinancePage() {
                       {overrideActive && (
                         <span className="rounded-full bg-accent-orange/20 px-2 py-0.5 text-xs text-accent-orange" title={`Temporary override until ${s.effectiveUntil}`}>
                           elevated until {s.effectiveUntil}
+                        </span>
+                      )}
+                      {s.endDate && (
+                        <span className={`rounded-full px-2 py-0.5 text-xs ${subEnded(s) ? "bg-white/10 text-gray-400" : "bg-accent-blue/20 text-accent-blue"}`}>
+                          {subEnded(s) ? `ended ${s.endDate}` : `ends ${s.endDate}`}
                         </span>
                       )}
                     </p>
@@ -1267,20 +1321,21 @@ export default function FinancePage() {
                 <option>AED</option><option>LKR</option><option>USD</option>
               </select>
             </Field>
-            <Field label="Cadence">
+            <Field label="Cadence" hint="Monthly uses a billing day; yearly uses the next date.">
               <select value={newSub.cadence} onChange={(e) => setNewSub((s) => ({ ...s, cadence: e.target.value as Sub["cadence"] }))} className={selectCls}>
                 <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
               </select>
             </Field>
             {newSub.cadence === "monthly" ? (
-              <Field label="Billing day"><input placeholder="1-31" type="number" min={1} max={31} value={newSub.billingDay} onChange={(e) => setNewSub((s) => ({ ...s, billingDay: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+              <Field label="Billing day" hint="Day of the month it's charged (1-31)."><input placeholder="1-31" type="number" min={1} max={31} value={newSub.billingDay} onChange={(e) => setNewSub((s) => ({ ...s, billingDay: e.target.value }))} className="w-20 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             ) : (
-              <Field label="Next date"><DatePicker value={newSub.nextDate} onChange={(v) => setNewSub((s) => ({ ...s, nextDate: v }))} /></Field>
+              <Field label="Next date" hint="Next charge date, used for yearly items."><DatePicker value={newSub.nextDate} onChange={(v) => setNewSub((s) => ({ ...s, nextDate: v }))} /></Field>
             )}
-            <Field label="Tax %"><input placeholder="0" type="number" value={newSub.taxPct} onChange={(e) => setNewSub((s) => ({ ...s, taxPct: e.target.value }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-            <Field label="Tenure (mo)" hint="Leave at 0 for an ongoing subscription that repeats every cycle with no end date (most subs). Enter a number of months only if this is a fixed-length contract that should show a countdown, e.g. 20 for a 20-month plan.">
+            <Field label="Tax %" hint="VAT or other tax added to each charge."><input placeholder="0" type="number" value={newSub.taxPct} onChange={(e) => setNewSub((s) => ({ ...s, taxPct: e.target.value }))} className="w-16 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Tenure (mo)" hint="0 = ongoing. Enter months only for a fixed-length contract.">
               <input placeholder="0 = ongoing" type="number" value={newSub.tenureMonths} onChange={(e) => setNewSub((s) => ({ ...s, tenureMonths: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" />
             </Field>
+            <Field label="Ends on" hint="Last charge date. Leave blank if it keeps renewing."><DatePicker value={newSub.endDate} onChange={(v) => setNewSub((s) => ({ ...s, endDate: v }))} /></Field>
             <button type="button" onClick={addSub} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">
               <Plus size={14} /> Add
             </button>
@@ -1289,7 +1344,7 @@ export default function FinancePage() {
 
         {/* Income (Item 1) — feeds the Spending Plan banner above */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-1 font-medium text-white">Income</h2>
+          <h2 className="relative z-10 mb-1 flex items-center gap-1 font-medium text-white">Income<InfoTip size="sm" text="Money coming in; recurring income feeds your monthly plan." label="About Income" /></h2>
           <p className="relative z-10 mb-3 text-xs text-gray-500">
             Mark a source &ldquo;recurring&rdquo; to have it count toward the Spending Plan above — one-off income (bonuses, gifts) can stay unmarked.
           </p>
@@ -1300,20 +1355,20 @@ export default function FinancePage() {
                   <div key={i.id} className="flex flex-wrap items-end gap-2 rounded-xl border border-accent-purple/40 p-2">
                     <Field label="Owner"><OwnerSelect value={incomeDraft.ownerId} onChange={(v) => setIncomeDraft({ ...incomeDraft, ownerId: v })} /></Field>
                     <Field label="Source"><input value={incomeDraft.source} onChange={(e) => setIncomeDraft({ ...incomeDraft, source: e.target.value })} className={inputCls} /></Field>
-                    <Field label="Type"><input value={incomeDraft.incomeType} onChange={(e) => setIncomeDraft({ ...incomeDraft, incomeType: e.target.value })} className={smallInputCls} /></Field>
+                    <Field label="Type" hint="Free label, e.g. salary, freelance, bonus."><input value={incomeDraft.incomeType} onChange={(e) => setIncomeDraft({ ...incomeDraft, incomeType: e.target.value })} className={smallInputCls} /></Field>
                     <Field label="Amount"><input type="number" value={incomeDraft.amount} onChange={(e) => setIncomeDraft({ ...incomeDraft, amount: Number(e.target.value) })} className={smallInputCls} /></Field>
                     <Field label="Currency">
                       <select value={incomeDraft.currency} onChange={(e) => setIncomeDraft({ ...incomeDraft, currency: e.target.value as Currency })} className={selectCls}>
                         <option>AED</option><option>LKR</option><option>USD</option>
                       </select>
                     </Field>
-                    <Field label="Recurring?" hint="Recurring income counts toward the Spending Plan banner above. One-off (bonuses, gifts) doesn't.">
+                    <Field label="Recurring?" hint="Recurring income counts toward your monthly plan; one-offs don't.">
                       <select value={incomeDraft.isRecurring ? "yes" : "no"} onChange={(e) => setIncomeDraft({ ...incomeDraft, isRecurring: e.target.value === "yes" })} className={selectCls}>
                         <option value="yes">Recurring</option><option value="no">One-off</option>
                       </select>
                     </Field>
                     {incomeDraft.isRecurring && (
-                      <Field label="Cadence">
+                      <Field label="Cadence" hint="How often this income arrives.">
                         <select value={incomeDraft.cadence} onChange={(e) => setIncomeDraft({ ...incomeDraft, cadence: e.target.value as Income["cadence"] })} className={selectCls}>
                           <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
                         </select>
@@ -1349,20 +1404,20 @@ export default function FinancePage() {
           <div className="relative z-10 mt-4 flex flex-wrap items-end gap-2 border-t border-base-border pt-4">
             <Field label="Owner"><OwnerSelect value={newIncome.ownerId} onChange={(v) => setNewIncome((s) => ({ ...s, ownerId: v }))} /></Field>
             <Field label="Source"><input placeholder="e.g. Salary" value={newIncome.source} onChange={(e) => setNewIncome((s) => ({ ...s, source: e.target.value }))} className={inputCls} /></Field>
-            <Field label="Type"><input placeholder="optional" value={newIncome.incomeType} onChange={(e) => setNewIncome((s) => ({ ...s, incomeType: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
+            <Field label="Type" hint="Free label, e.g. salary, freelance, bonus."><input placeholder="optional" value={newIncome.incomeType} onChange={(e) => setNewIncome((s) => ({ ...s, incomeType: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             <Field label="Amount"><input placeholder="0" type="number" value={newIncome.amount} onChange={(e) => setNewIncome((s) => ({ ...s, amount: e.target.value }))} className="w-24 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
             <Field label="Currency">
               <select value={newIncome.currency} onChange={(e) => setNewIncome((s) => ({ ...s, currency: e.target.value as Currency }))} className={selectCls}>
                 <option>AED</option><option>LKR</option><option>USD</option>
               </select>
             </Field>
-            <Field label="Recurring?" hint="Recurring income counts toward the Spending Plan banner above. One-off (bonuses, gifts) doesn't.">
+            <Field label="Recurring?" hint="Recurring income counts toward your monthly plan; one-offs don't.">
               <select value={newIncome.isRecurring ? "yes" : "no"} onChange={(e) => setNewIncome((s) => ({ ...s, isRecurring: e.target.value === "yes" }))} className={selectCls}>
                 <option value="yes">Recurring</option><option value="no">One-off</option>
               </select>
             </Field>
             {newIncome.isRecurring && (
-              <Field label="Cadence">
+              <Field label="Cadence" hint="How often this income arrives.">
                 <select value={newIncome.cadence} onChange={(e) => setNewIncome((s) => ({ ...s, cadence: e.target.value as Income["cadence"] }))} className={selectCls}>
                   <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
                 </select>
@@ -1378,7 +1433,7 @@ export default function FinancePage() {
         {/* Savings Goal (2026-08-23) — one active goal per person, private by default, optional household-shared. See lib/supabase/useSavingsGoal.ts. */}
         <section className="glass-card rounded-xl2 p-5">
           <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white">
-            <Target size={16} className="text-accent-green" /> Savings goal
+            <Target size={16} className="text-accent-green" /> Savings goal<InfoTip size="sm" text="One target amount by a date, tracked against monthly saving." />
           </h2>
           <p className="relative z-10 mb-3 text-xs text-gray-500">
             Save X amount by X date, tracked against your actual monthly progress. One active goal at a time — mark it
@@ -1395,7 +1450,7 @@ export default function FinancePage() {
                 </select>
               </Field>
               <Field label="By date"><DatePicker value={newGoal.targetDate} onChange={(v) => setNewGoal((s) => ({ ...s, targetDate: v }))} /></Field>
-              <Field label="Visibility" hint="Private = only you can see this goal and its progress. Shared = your household can see it too, but only you can edit or log savings toward it.">
+              <Field label="Visibility" hint="Private: only you. Shared: household sees it, only you edit.">
                 <select value={newGoal.visibility} onChange={(e) => setNewGoal((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
                   <option value="private">Private (only me)</option>
                   <option value="shared_view">Shared with household</option>
@@ -1415,7 +1470,7 @@ export default function FinancePage() {
                 </select>
               </Field>
               <Field label="By date"><DatePicker value={goalDraft.targetDate} onChange={(v) => setGoalDraft((s) => ({ ...s, targetDate: v }))} /></Field>
-              <Field label="Visibility" hint="Private = only you can see this goal and its progress. Shared = your household can see it too, but only you can edit or log savings toward it.">
+              <Field label="Visibility" hint="Private: only you. Shared: household sees it, only you edit.">
                 <select value={goalDraft.visibility} onChange={(e) => setGoalDraft((s) => ({ ...s, visibility: e.target.value as GoalVisibility }))} className={selectCls}>
                   <option value="private">Private (only me)</option>
                   <option value="shared_view">Shared with household</option>
@@ -1512,7 +1567,7 @@ export default function FinancePage() {
 
         {/* Unified Add Expense (Item 2 + Item 3) — monthly recurring / fixed-term / one-off, all in one place, with min-max estimate entry */}
         <section className="glass-card rounded-xl2 p-5">
-          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white"><Wallet size={16} className="text-accent-purple" /> Expenses</h2>
+          <h2 className="relative z-10 mb-1 flex items-center gap-2 font-medium text-white"><Wallet size={16} className="text-accent-purple" /> Expenses<InfoTip size="sm" text="Anything else: one-off, fixed-term or monthly costs." /></h2>
           <p className="relative z-10 mb-3 text-xs text-gray-500">
             One place for anything that doesn&rsquo;t fit Loans/Subscriptions/Schemes above — one-off costs (car registration renewal), short fixed-term costs, or any monthly recurring line.
           </p>
@@ -1530,7 +1585,7 @@ export default function FinancePage() {
                     <Field label="Owner"><OwnerSelect value={expenseDraft.ownerId} onChange={(v) => setExpenseDraft({ ...expenseDraft, ownerId: v })} /></Field>
                     <Field label="Label"><input value={expenseDraft.label} onChange={(ev) => setExpenseDraft({ ...expenseDraft, label: ev.target.value })} className={inputCls} /></Field>
                     <Field label="Category"><input value={expenseDraft.category} onChange={(ev) => setExpenseDraft({ ...expenseDraft, category: ev.target.value })} className="w-28 rounded-xl border border-base-border bg-base-card px-2 py-1.5 text-sm text-gray-100 outline-none" /></Field>
-                    <Field label="Type" hint="Monthly recurring = repeats every month like a subscription. Fixed-term = active only between a start and end date. One-off = a single payment due once.">
+                    <Field label="Type" hint="Monthly repeats; fixed-term runs between two dates; one-off is due once.">
                       <select value={expenseDraft.expenseType} onChange={(ev) => setExpenseDraft({ ...expenseDraft, expenseType: ev.target.value as ExpenseType })} className={selectCls}>
                         <option value="monthly">Monthly recurring</option><option value="fixed_term">Fixed-term</option><option value="one_off">One-off</option>
                       </select>
@@ -1542,7 +1597,7 @@ export default function FinancePage() {
                       </select>
                     </Field>
                     {expenseDraft.expenseType === "monthly" && (
-                      <Field label="Billing day"><input type="number" min={1} max={31} value={expenseDraft.billingDay} onChange={(ev) => setExpenseDraft({ ...expenseDraft, billingDay: Number(ev.target.value) })} className={smallInputCls} /></Field>
+                      <Field label="Billing day" hint="Day of the month it's charged (1-31)."><input type="number" min={1} max={31} value={expenseDraft.billingDay} onChange={(ev) => setExpenseDraft({ ...expenseDraft, billingDay: Number(ev.target.value) })} className={smallInputCls} /></Field>
                     )}
                     {expenseDraft.expenseType === "fixed_term" && (
                       <>
@@ -1552,7 +1607,7 @@ export default function FinancePage() {
                     )}
                     {expenseDraft.expenseType === "one_off" && (
                       <>
-                        <Field label="Due date"><DatePicker value={expenseDraft.dueDate} onChange={(v) => setExpenseDraft({ ...expenseDraft, dueDate: v })} /></Field>
+                        <Field label="Due date" hint="The date this payment is due."><DatePicker value={expenseDraft.dueDate} onChange={(v) => setExpenseDraft({ ...expenseDraft, dueDate: v })} /></Field>
                         <Field label="Paid?">
                           <select value={expenseDraft.paid ? "yes" : "no"} onChange={(ev) => setExpenseDraft({ ...expenseDraft, paid: ev.target.value === "yes" })} className={selectCls}>
                             <option value="no">Unpaid</option><option value="yes">Paid</option>
@@ -1605,7 +1660,7 @@ export default function FinancePage() {
               <Field label="Owner"><OwnerSelect value={newExpense.ownerId} onChange={(v) => setNewExpense((s) => ({ ...s, ownerId: v }))} /></Field>
               <Field label="Label"><input placeholder="e.g. Car registration renewal" value={newExpense.label} onChange={(e) => setNewExpense((s) => ({ ...s, label: e.target.value }))} className={inputCls} /></Field>
               <Field label="Category"><input placeholder="optional" value={newExpense.category} onChange={(e) => setNewExpense((s) => ({ ...s, category: e.target.value }))} className="w-28 rounded-xl border border-base-border bg-base-card px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent-purple" /></Field>
-              <Field label="Type" hint="Monthly recurring = repeats every month like a subscription. Fixed-term = active only between a start and end date. One-off = a single payment due once.">
+              <Field label="Type" hint="Monthly repeats; fixed-term runs between two dates; one-off is due once.">
                 <select value={newExpense.expenseType} onChange={(e) => setNewExpense((s) => ({ ...s, expenseType: e.target.value as ExpenseType }))} className={selectCls}>
                   <option value="monthly">Monthly recurring</option><option value="fixed_term">Fixed-term</option><option value="one_off">One-off</option>
                 </select>
@@ -1620,6 +1675,7 @@ export default function FinancePage() {
               <label className="flex items-center gap-1.5 text-xs text-gray-400">
                 <input type="checkbox" checked={newExpense.useRange} onChange={(e) => setNewExpense((s) => ({ ...s, useRange: e.target.checked }))} />
                 I don&rsquo;t have an exact number
+                <InfoTip size="sm" text="Enter a min and max; Hari uses the midpoint as an estimate." />
               </label>
               {newExpense.useRange ? (
                 <>
@@ -1631,7 +1687,7 @@ export default function FinancePage() {
                 <Field label="Amount"><input type="number" value={newExpense.amount} onChange={(e) => setNewExpense((s) => ({ ...s, amount: e.target.value }))} className={smallInputCls} /></Field>
               )}
               {newExpense.expenseType === "monthly" && (
-                <Field label="Billing day"><input type="number" min={1} max={31} value={newExpense.billingDay} onChange={(e) => setNewExpense((s) => ({ ...s, billingDay: e.target.value }))} className={smallInputCls} /></Field>
+                <Field label="Billing day" hint="Day of the month it's charged (1-31)."><input type="number" min={1} max={31} value={newExpense.billingDay} onChange={(e) => setNewExpense((s) => ({ ...s, billingDay: e.target.value }))} className={smallInputCls} /></Field>
               )}
               {newExpense.expenseType === "fixed_term" && (
                 <>
@@ -1640,7 +1696,7 @@ export default function FinancePage() {
                 </>
               )}
               {newExpense.expenseType === "one_off" && (
-                <Field label="Due date"><DatePicker value={newExpense.dueDate} onChange={(v) => setNewExpense((s) => ({ ...s, dueDate: v }))} /></Field>
+                <Field label="Due date" hint="The date this payment is due."><DatePicker value={newExpense.dueDate} onChange={(v) => setNewExpense((s) => ({ ...s, dueDate: v }))} /></Field>
               )}
               <Field label="Notes"><input value={newExpense.notes} onChange={(e) => setNewExpense((s) => ({ ...s, notes: e.target.value }))} className={inputCls} /></Field>
               <button type="button" onClick={addExpense} className="flex items-center gap-1 rounded-xl bg-accent-purple px-3 py-2 text-sm text-white">

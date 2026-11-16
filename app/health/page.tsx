@@ -1,5 +1,6 @@
 "use client";
 
+import InfoTip from "@/components/InfoTip";
 import { useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import DatePicker from "@/components/DatePicker";
@@ -177,7 +178,7 @@ function ConditionsSection() {
 
   return (
     <section className="glass-card rounded-xl2 p-5">
-      <h2 className="relative z-10 mb-3 font-medium text-white">Conditions &amp; history</h2>
+      <h2 className="relative z-10 mb-3 flex items-center gap-1 font-medium text-white">Conditions &amp; history<InfoTip size="sm" text="Ongoing or past conditions for each household member." /></h2>
       <div className="relative z-10 mb-3 flex flex-wrap items-end gap-2">
         <div>
           <label className="mb-1 block text-xs text-gray-500">Household member</label>
@@ -295,7 +296,7 @@ function AllergyCard({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Status</label>
+            <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Status<InfoTip size="sm" text="Confirmed reacted; suspected not proven; safe means tested fine." /></label>
             <select
               value={entry.status}
               onChange={(e) => onUpdate({ ...entry, status: e.target.value as AllergyStatus })}
@@ -323,7 +324,7 @@ function AllergyCard({
         </div>
       </div>
       <div className="mb-3">
-        <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
+        <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Reaction / symptoms observed<InfoTip size="sm" text="What happened, so doctors see the full picture." /></label>
         <input
           value={entry.reaction}
           onChange={(e) => onUpdate({ ...entry, reaction: e.target.value })}
@@ -384,7 +385,7 @@ function AllergiesSection() {
   return (
     <section className="glass-card rounded-xl2 p-5">
       <div className="relative z-10 mb-4">
-        <h2 className="font-medium text-white">Allergy history</h2>
+        <h2 className="flex items-center gap-1 font-medium text-white">Allergy history<InfoTip size="sm" text="Known triggers and how sure you are about each." /></h2>
         <p className="mt-1 text-sm text-gray-400">
           Trial-and-error log — what's caused a reaction, what's only suspected, and what's been tested and
           found safe.
@@ -419,7 +420,7 @@ function AllergiesSection() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Status</label>
+            <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Status<InfoTip size="sm" text="Confirmed reacted; suspected not proven; safe means tested fine." /></label>
             <select
               value={draft.status}
               onChange={(e) => setDraft({ ...draft, status: e.target.value as AllergyStatus })}
@@ -437,7 +438,7 @@ function AllergiesSection() {
             <DatePicker value={draft.date} onChange={(v) => setDraft({ ...draft, date: v })} className="w-full" />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Reaction / symptoms observed</label>
+            <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Reaction / symptoms observed<InfoTip size="sm" text="What happened, so doctors see the full picture." /></label>
             <input
               value={draft.reaction}
               onChange={(e) => setDraft({ ...draft, reaction: e.target.value })}
@@ -584,7 +585,7 @@ function AppointmentsSection() {
 
   return (
     <section className="glass-card rounded-xl2 p-5">
-      <h2 className="relative z-10 mb-3 font-medium text-white">Appointment history</h2>
+      <h2 className="relative z-10 mb-3 flex items-center gap-1 font-medium text-white">Appointment history<InfoTip size="sm" text="Past and upcoming visits, with clinic and notes." /></h2>
       <div className="relative z-10 mb-3 flex flex-wrap items-end gap-2">
         <div>
           <label className="mb-1 block text-xs text-gray-500">Household member</label>
@@ -773,7 +774,7 @@ function InsuranceCard({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-gray-500">Key policyholder</label>
+            <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Key policyholder<InfoTip size="sm" text="Whose plan covers this person, e.g. a spouse's employer." /></label>
             <input
               value={policy.policyholderName}
               onChange={(e) => onUpdate({ ...policy, policyholderName: e.target.value })}
@@ -783,11 +784,11 @@ function InsuranceCard({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1 block text-xs text-gray-500">Expiry date</label>
+              <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Expiry date<InfoTip size="sm" text="Last day the policy covers you." /></label>
               <DatePicker value={policy.expiryDate} onChange={(v) => onUpdate({ ...policy, expiryDate: v })} className="w-full" />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-gray-500">Renewal date</label>
+              <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Renewal date<InfoTip size="sm" text="When the policy must be renewed or repriced." /></label>
               <DatePicker value={policy.renewalDate} onChange={(v) => onUpdate({ ...policy, renewalDate: v })} className="w-full" />
             </div>
           </div>
@@ -804,7 +805,7 @@ function InsuranceCard({
 
       <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Co-payments</label>
+          <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Co-payments<InfoTip size="sm" text="Your share of each visit or treatment." /></label>
           <textarea
             value={policy.copays}
             onChange={(e) => onUpdate({ ...policy, copays: e.target.value })}
@@ -814,7 +815,7 @@ function InsuranceCard({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-gray-500">Allowances</label>
+          <label className="mb-1 flex items-center gap-0.5 text-xs text-gray-500">Allowances<InfoTip size="sm" text="Yearly limits, e.g. dental or optical caps." /></label>
           <textarea
             value={policy.allowances}
             onChange={(e) => onUpdate({ ...policy, allowances: e.target.value })}
@@ -872,7 +873,7 @@ function InsuranceSection() {
     <section className="glass-card rounded-xl2 p-5">
       <div className="relative z-10 mb-4 flex items-center justify-between">
         <div>
-          <h2 className="font-medium text-white">Insurance details</h2>
+          <h2 className="flex items-center gap-1 font-medium text-white">Insurance details<InfoTip size="sm" text="Policies per person; expiry dates feed reminders." /></h2>
           <p className="mt-1 text-sm text-gray-400">
             Provider, policyholder, key dates, co-pays/allowances, and documents — cards, network file, and
             benefits table can be uploaded, then opened or downloaded any time.
